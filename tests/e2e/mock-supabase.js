@@ -205,6 +205,8 @@ export function createClient() {
       return ch;
     },
     removeChannel: (ch) => channels.delete(ch),
-    functions: { invoke: async () => ({ data: null, error: { message: 'niet beschikbaar in test' } }) },
+    functions: { invoke: async (_name, { body } = {}) => (body?.search
+      ? { data: { words: ['pasta'], results: [{ title: 'Pasta met spinazie', url: 'https://example.com/pasta', image: null, source: 'Leuke Recepten' }], sources: [] }, error: null }
+      : { data: null, error: { message: 'niet beschikbaar in test' } }) },
   };
 }

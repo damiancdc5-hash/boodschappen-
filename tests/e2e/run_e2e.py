@@ -127,6 +127,18 @@ def main():
                 anna.get_by_role('button', name='＋ Recept toevoegen').click(); anna.locator('#it [data-m=manual]').click()
                 anna.fill('input[name=title]', t); anna.fill('textarea[name=ings]', ings); anna.get_by_role('button', name='Opslaan').click()
                 expect(anna.locator('.card h3', has_text=t)).to_be_visible()
+            # keukengerei uit een online recept komt niet op de lijst
+            anna.get_by_role('button', name='＋ Recept toevoegen').click(); anna.locator('#it [data-m=manual]').click()
+            anna.fill('input[name=title]', 'Ovenschotel kip'); anna.fill('textarea[name=ings]', '300 g kipfilet\n1 ovenschaal\nbakpapier'); anna.get_by_role('button', name='Opslaan').click()
+            anna.locator('.card h3', has_text='Ovenschotel kip').click()
+            expect(anna.get_by_text('keukengerei — niet op de lijst').first).to_be_visible()
+            anna.get_by_role('button', name='Ontbrekende ingrediënten op lijst').click()
+            expect(anna.locator('#toast')).to_contain_text('1 toegevoegd')
+            anna.locator('[data-close]').click()
+            # recepten zoeken op zin
+            anna.fill('#zin input[name=q]', 'ik heb zin in pasta'); anna.click('#zin button')
+            expect(anna.locator('#sug .chip', has_text='Pasta bolognese')).to_be_visible()
+            expect(anna.locator('#sug .offer-card', has_text='Pasta met spinazie')).to_be_visible()
             anna.locator('.card h3', has_text='Pasta bolognese').click()
             anna.get_by_role('button', name='Ontbrekende ingrediënten op lijst').click()
             expect(anna.locator('#toast')).to_contain_text('opgeteld')
@@ -149,6 +161,7 @@ def main():
             expect(anna.locator('#toast')).to_contain_text('Boodschappenlijst bijgewerkt')
             # een dag uit het goedgekeurde menu halen → bijbehorende boodschappen gaan van de lijst
             anna.goto(BASE + '#/lijst'); anna.wait_for_timeout(400)
+            assert anna.locator('.item .name', has_text='ovenschaal').count() == 0, 'ovenschaal op de lijst'
             before = anna.locator('.item').count()
             names_before = anna.locator('.item .name').all_inner_texts()
             anna.goto(BASE + '#/weekmenu')

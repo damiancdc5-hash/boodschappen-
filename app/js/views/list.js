@@ -1,7 +1,7 @@
 // Gedeelde boodschappenlijst met realtime sync, favorieten, categorieën en afrekenen.
 import { html, setHTML, toast, errorText, modal, formData, num, confirmDialog, debounce, isoDate, esc } from '../ui.js';
 import { sb, q, state, hid, onChange, mutate, cacheGet, cacheSet, memberName } from '../api.js';
-import { guessCategory, CATEGORIES, mergeItems, nameKey } from '../lib/ingredients.js';
+import { guessCategory, CATEGORIES, mergeItems, nameKey, isEquipment } from '../lib/ingredients.js';
 import { formatQty, euro } from '../lib/units.js';
 import { STORES, storeName } from '../pricing.js';
 
@@ -13,6 +13,7 @@ export async function loadLists() {
 
 /** Voegt producten toe aan een lijst zonder dubbelingen (gebruikt door recepten en weekmenu). */
 export async function addToList(listId, products, source = null) {
+  products = products.filter((p) => !isEquipment(p.name)); // geen ovenschaal of bakpapier op de lijst
   const existing = await q(sb.from('list_items').select('*').eq('list_id', listId).eq('checked', false));
   const { updates, additions } = mergeItems(existing, products);
   for (const u of updates) await q(sb.from('list_items').update({ quantity: u.quantity, unit: u.unit }).eq('id', u.id));

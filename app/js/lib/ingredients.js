@@ -43,7 +43,8 @@ export function parseIngredientLine(line) {
   }
   name = cleanName(name.replace(/^(gram|g)\s+/i, ''));
   if (!name) return null;
-  return { quantity, unit, name, raw, optional };
+  const equipment = isEquipment(name) || isEquipment(raw);
+  return { quantity, unit, name, raw, optional: optional || equipment, ...(equipment ? { equipment: true } : {}) };
 }
 
 const SERVINGS_RE = /(?:voor|serves|porties?|personen|pers\.?|aantal personen|recept voor)\s*[:\-]?\s*(\d{1,2})|(\d{1,2})\s*(?:personen|porties|pers\.?|people|servings)/i;
@@ -211,4 +212,26 @@ export function guessCategory(name) {
     if (n.includes(' ' + w) || n.includes(w + ' ')) return cat;
   }
   return 'Overig';
+}
+
+// --- keukengerei herkennen: dat hoort niet op de boodschappenlijst ------------------------------
+const EQUIPMENT = ['ovenschaal', 'ovenschalen', 'ovenvaste schaal', 'bakplaat', 'bakplaten', 'bakblik', 'bakvorm', 'bakvormen', 'bakvormpjes', 'springvorm',
+  'taartvorm', 'cakevorm', 'muffinvorm', 'muffinvormpjes', 'quichevorm', 'tulbandvorm', 'braadslede', 'koekenpan', 'pan', 'pannen', 'wok', 'hapjespan',
+  'soeppan', 'steelpan', 'braadpan', 'grillpan', 'snelkookpan', 'staafmixer', 'blender', 'keukenmachine', 'foodprocessor', 'mixer', 'handmixer',
+  'garde', 'spatel', 'pollepel', 'schuimspaan', 'rasp', 'vergiet', 'zeef', 'deegroller', 'snijplank', 'ovenrooster', 'rooster', 'thermometer',
+  'vleesthermometer', 'spuitzak', 'slagroomspuit', 'bakpapier', 'aluminiumfolie', 'vershoudfolie', 'plasticfolie', 'keukenpapier', 'keukentouw',
+  'satéprikkers', 'sateprikkers', 'spiesjes', 'prikkers', 'cocktailprikkers', 'houten spiesen', 'sjaslikpennen', 'ijsjesvormpjes', 'ramekins',
+  'schaaltjes', 'kommetjes', 'mengkom', 'beslagkom', 'weckpotten', 'weckpot', 'glazen', 'serveerschaal', 'airfryer', 'oven', 'magnetron',
+  'barbecue', 'bbq', 'ijsmachine', 'broodrooster', 'tosti-ijzer', 'wafelijzer', 'mandoline', 'spiraalsnijder', 'vijzel', 'kwast', 'bakkwast'];
+const EQUIP_RE = new RegExp(`^(?:(?:grote|groot|kleine|klein|ronde|rond|vierkante|rechthoekige|ovenvaste|ingevette|diepe|platte|anti-aanbak|ijzeren|houten|\\d+)\\s+)*(?:${EQUIPMENT.map((w) => w.replace(/[-]/g, '\\-')).join('|')})(?:\\s*(?:van|à|a|met|ø|\\d|\\(|,|x).*)?$`, 'i');
+
+/** Is dit keukengerei of verbruiksmateriaal (ovenschaal, bakpapier, spiesjes) in plaats van een levensmiddel? */
+export function isEquipment(name) {
+  const n = cleanName(name).toLowerCase().replace(/^(een|1)\s+/, '');
+  return EQUIP_RE.test(n);
+}
+
+/** Hoort dit ingrediënt op de boodschappenlijst / in de kosten? */
+export function isShoppable(ing) {
+  return !ing.optional && !ing.equipment && !isEquipment(ing.name);
 }

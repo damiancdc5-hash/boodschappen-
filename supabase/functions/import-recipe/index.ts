@@ -45,12 +45,66 @@ function pageText(html: string) {
     .slice(0, 20000);
 }
 
+// ---------------------------------------------------------------- recepten zoeken ("ik heb zin in rijst met kip")
+const FILLER = new Set(['ik', 'heb', 'zin', 'in', 'iets', 'met', 'een', 'wat', 'lekkers', 'lekker', 'recept', 'recepten', 'maken', 'vanavond',
+  'eten', 'wil', 'graag', 'voor', 'de', 'het', 'en', 'of', 'op', 'we', 'wij', 'willen', 'zoek', 'zoeken', 'naar', 'iemand', 'mag', 'zou']);
+
+function searchWords(q: string) {
+  const w = q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((x) => x.length > 1 && !FILLER.has(x));
+  return w.length ? w : q.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; Boodschappenassistent/1.0; recepten-zoeken)', 'Accept': 'text/html', 'Accept-Language': 'nl-NL,nl;q=0.9' };
+const unq = (s: string) => { try { return JSON.parse('"' + s.replace(/&quot;/g, '"').replace(/\\\//g, '/') + '"'); } catch { return s; } };
+
+async function searchLeukeRecepten(words: string[]) {
+  const res = await fetch('https://www.leukerecepten.nl/?s=' + encodeURIComponent(words.join(' ')), { headers: UA, signal: AbortSignal.timeout(10000) });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const out: { title: string; url: string; image: string | null; source: string }[] = [];
+  const re = /<a class="card card-recipe[^"]*"\s+href="([^"]+)">([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(html))) {
+    const t = m[2].match(/&quot;title&quot;:&quot;(.*?)&quot;/);
+    const img = m[2].match(/<img[^>]+src="([^"]+)"/);
+    if (t) out.push({ title: unq(t[1]), url: m[1], image: img ? img[1] : null, source: 'Leuke Recepten' });
+  }
+  return out;
+}
+
+async function searchAllerhande(words: string[]) {
+  const res = await fetch('https://www.ah.nl/allerhande/recepten-zoeken?query=' + encodeURIComponent(words.join(' ')), { headers: UA, signal: AbortSignal.timeout(10000) });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const paths = [...new Set(html.match(/\/allerhande\/recept\/R-R\d+\/[a-z0-9-]+/g) || [])].filter((p) => !/advertorial/.test(p));
+  return paths.map((p) => {
+    const slug = p.split('/').pop() || '';
+    const title = slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+    return { title, url: 'https://www.ah.nl' + p, image: null, source: 'Allerhande' };
+  });
+}
+
+async function searchRecipes(query: string) {
+  const words = searchWords(query);
+  const settled = await Promise.allSettled([searchLeukeRecepten(words), searchAllerhande(words)]);
+  const all = settled.flatMap((s) => (s.status === 'fulfilled' ? s.value : []));
+  const seen = new Set<string>();
+  const scored = all.filter((r) => (seen.has(r.url) ? false : (seen.add(r.url), true))).map((r, i) => {
+    const t = r.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const hits = words.filter((w) => t.includes(w)).length;
+    return { ...r, score: hits * 10 - i * 0.01 };
+  }).filter((r) => r.score > 0 || words.length === 0);
+  scored.sort((a, b) => b.score - a.score);
+  return { words, results: scored.slice(0, 24), sources: settled.map((s, i) => ({ source: ['Leuke Recepten', 'Allerhande'][i], ok: s.status === 'fulfilled' })) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Alleen POST' }, 405);
   let url: URL;
   try {
     const body = await req.json();
+    if (typeof body.search === 'string' && body.search.trim()) return json(await searchRecipes(body.search.slice(0, 120)));
     url = new URL(String(body.url || ''));
   } catch { return json({ error: 'Ongeldige link' }, 400); }
   if (!/^https?:$/.test(url.protocol) || isPrivateHost(url.hostname)) return json({ error: 'Deze link is niet toegestaan' }, 400);

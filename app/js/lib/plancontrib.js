@@ -1,6 +1,6 @@
 // Bijhouden welke boodschappen bij welke dag van het weekmenu horen, zodat een dag
 // later precies weer van de lijst kan worden gehaald.
-import { nameKey, scaleIngredients, guessCategory } from './ingredients.js';
+import { nameKey, scaleIngredients, guessCategory, isShoppable } from './ingredients.js';
 import { toBase, round } from './units.js';
 
 const IGNORE = new Set(['water', 'kraanwater', 'heet water', 'koud water', 'ijsblokjes']);
@@ -22,7 +22,7 @@ export function planContributions(entries, pantry = []) {
     const r = e.recipe;
     if (r) {
       for (const ing of scaleIngredients(r.ingredients || [], r.servings || e.servings, e.servings)) {
-        if (ing.optional) continue;
+        if (!isShoppable(ing)) continue;
         const key = nameKey(ing.name);
         if (IGNORE.has(key)) continue;
         const b = toBase(ing.quantity ?? 1, ing.unit || 'st') || { amount: 1, unit: 'st' };

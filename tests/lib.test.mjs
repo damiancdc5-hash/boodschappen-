@@ -171,3 +171,14 @@ test('route en dichtstbijzijnde vestiging', () => {
 });
 
 function pick(o) { return { quantity: o.quantity, unit: o.unit, name: o.name }; }
+
+test('keukengerei niet op de lijst', async () => {
+  const { isEquipment, parseIngredientLine, isShoppable } = await import('../app/js/lib/ingredients.js');
+  for (const n of ['ovenschaal', 'grote ovenschaal', 'ovenschaal van 20x30 cm', 'bakpapier', 'satéprikkers', 'springvorm (24 cm)', '1 koekenpan', 'staafmixer'])
+    assert.ok(isEquipment(n), n);
+  for (const n of ['ovenschotel', 'pannenkoekenmix', 'aardbeien', 'schaal aardbeien', 'panko', 'kipfilet', 'rijst', 'wokgroente', 'roosterbrood'])
+    assert.ok(!isEquipment(n), n);
+  const p = parseIngredientLine('1 ovenschaal (ca. 20x30 cm)');
+  assert.ok(p.equipment && !isShoppable(p));
+  assert.ok(!isShoppable({ name: 'ovenschaal', quantity: 1, unit: 'st' })); // al opgeslagen recepten
+});

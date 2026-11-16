@@ -1,6 +1,6 @@
 // Automatisch goedkoop weekmenu: kiest recepten die samen zo weinig mogelijk kosten,
 // ingrediënten delen (minder restjes) en de voorraad gebruiken.
-import { nameKey, scaleIngredients, subtractPantry } from './ingredients.js';
+import { nameKey, scaleIngredients, subtractPantry, isShoppable } from './ingredients.js';
 import { toBase, round } from './units.js';
 import { costForPacks } from './offers.js';
 
@@ -12,7 +12,7 @@ export function aggregateNeeds(recipes, persons) {
   for (const r of recipes) {
     const scaled = scaleIngredients(r.ingredients || [], r.servings || persons, persons);
     for (const ing of scaled) {
-      if (ing.optional) continue;
+      if (!isShoppable(ing)) continue;
       const key = nameKey(ing.name);
       if (IGNORE.has(key)) continue;
       const b = toBase(ing.quantity ?? 1, ing.unit || 'st') || { amount: 1, unit: 'st' };

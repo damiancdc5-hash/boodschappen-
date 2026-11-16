@@ -1,11 +1,17 @@
 // Recepten: importeren via URL, tekst, foto of PDF; schalen; op de boodschappenlijst zetten.
 import { html, setHTML, toast, errorText, modal, formData, num, confirmDialog, loading, debounce } from '../ui.js';
 import { sb, q, hid, onChange, memberName } from '../api.js';
-import { parseRecipeText, parseIngredientLine, scaleIngredients, subtractPantry } from '../lib/ingredients.js';
+import { parseRecipeText, parseIngredientLine, scaleIngredients, subtractPantry, isShoppable, isEquipment } from '../lib/ingredients.js';
 import { recipeFromJsonLd } from '../lib/recipes.js';
 import { formatQty } from '../lib/units.js';
 import { RECIPE_IMPORT_FUNCTION } from '../config.js';
 import { addToList, defaultListId } from './list.js';
+
+const FILLER = new Set(['ik', 'heb', 'zin', 'in', 'iets', 'met', 'een', 'wat', 'lekkers', 'lekker', 'recept', 'recepten', 'maken', 'vanavond',
+  'eten', 'wil', 'graag', 'voor', 'de', 'het', 'en', 'of', 'op', 'we', 'wij', 'willen', 'zoek', 'zoeken', 'naar']);
+export function suggestionWords(q) {
+  return String(q).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((x) => x.length > 1 && !FILLER.has(x));
+}
 
 export async function loadRecipes() {
   const [recipes, ings] = await Promise.all([
@@ -20,7 +26,11 @@ export async function loadRecipes() {
 export async function render(el) {
   let recipes = [], filter = '';
   setHTML(el, html`<div class="row between"><h1>Recepten</h1><button class="btn" id="imp">＋ Recept toevoegen</button></div>
-    <input id="f" placeholder="Zoek recept of ingrediënt…" style="margin-bottom:1rem"><div id="list">${loading()}</div>`);
+    <form class="card" id="zin" autocomplete="off"><h2>💡 Waar heb je zin in?</h2>
+      <div class="row"><input name="q" class="grow" placeholder="Bijv. rijst met kip, iets met pasta en spinazie, vegetarische curry" required>
+        <button class="btn">Zoek recepten</button></div>
+      <div id="sug"></div></form>
+    <input id="f" placeholder="Zoek in jullie recepten…" style="margin-bottom:1rem"><div id="list">${loading()}</div>`);
   const draw = () => {
     const f = filter.toLowerCase();
     const shown = recipes.filter((r) => !f || r.title.toLowerCase().includes(f) || r.tags.some((t) => t.includes(f)) || r.ingredients.some((i) => i.name.toLowerCase().includes(f)));
@@ -32,6 +42,41 @@ export async function render(el) {
   const load = async () => { recipes = await loadRecipes(); draw(); };
   el.querySelector('#f').oninput = (e) => { filter = e.target.value; draw(); };
   el.querySelector('#imp').onclick = () => importDialog(load);
+  let online = [];
+  el.querySelector('#zin').onsubmit = async (e) => {
+    e.preventDefault();
+    const query = e.target.q.value.trim();
+    const words = suggestionWords(query);
+    const mine = recipes.filter((r) => { const t = (r.title + ' ' + r.ingredients.map((i) => i.name).join(' ')).toLowerCase(); return words.every((w) => t.includes(w)); });
+    const sug = el.querySelector('#sug');
+    const ownHtml = mine.length ? html`<h3 style="margin-top:1rem">Uit jullie eigen recepten</h3><div class="row">${mine.map((r) => html`<button type="button" class="chip" data-r="${r.id}">📖 ${r.title}</button>`)}</div>` : '';
+    setHTML(sug, html`${ownHtml}${loading('Recepten zoeken op Leuke Recepten en Allerhande…')}`);
+    try {
+      const { data, error } = await sb.functions.invoke(RECIPE_IMPORT_FUNCTION, { body: { search: query } });
+      if (error || data?.error) throw new Error(data?.error || error.message);
+      if (!data?.results) throw new Error('De recept-functie in Supabase is nog de oude versie. Werk "import-recipe" bij (zie de stappen in de chat/README).');
+      online = data.results;
+      setHTML(sug, html`${ownHtml}
+        <h3 style="margin-top:1rem">Online gevonden${data.words?.length ? ` voor "${data.words.join(' ')}"` : ''}</h3>
+        ${online.length ? html`<div class="offer-grid">${online.map((r, i) => html`<div class="offer-card">
+          <div class="offer-img">${r.image ? html`<img src="${r.image}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : html`<span>🍽️</span>`}</div>
+          <div class="offer-body"><div class="offer-name">${r.title}</div><div class="small muted">${r.source}</div>
+            <div class="row" style="margin-top:auto"><button type="button" class="btn small" data-imp="${i}">＋ Toevoegen</button>
+              <a class="btn small ghost" href="${r.url}" target="_blank" rel="noopener">Bekijk</a></div></div></div>`)}</div>`
+          : html`<p class="muted">Niets gevonden. Probeer andere woorden, bijvoorbeeld alleen het hoofdingrediënt.</p>`}`);
+    } catch (err) { setHTML(sug, html`${ownHtml}<p class="notice warn">${errorText(err)}</p>`); }
+  };
+  el.querySelector('#zin').onclick = async (e) => {
+    const b = e.target.closest('[data-imp]');
+    const own = e.target.closest('[data-r]');
+    if (own) { showRecipe(recipes.find((r) => r.id === own.dataset.r), load); return; }
+    if (!b) return;
+    const r = online[+b.dataset.imp];
+    b.disabled = true; b.textContent = 'Ophalen…';
+    try { const draft = await fromUrl(r.url); editRecipe(draft, load); }
+    catch (err) { toast(errorText(err), 'error'); }
+    finally { b.disabled = false; b.textContent = '＋ Toevoegen'; }
+  };
   el.querySelector('#list').onclick = (e) => { const c = e.target.closest('[data-r]'); if (c) showRecipe(recipes.find((r) => r.id === c.dataset.r), load); };
   await load();
   return onChange(['recipes', 'recipe_ingredients'], debounce(() => load().catch(() => {}), 400));
@@ -162,7 +207,7 @@ function showRecipe(r, onChanged) {
         <button class="btn small ghost" data-p="-1">−</button><b>${persons}</b><button class="btn small ghost" data-p="1">＋</button>
         <span class="grow"></span><span class="row">${r.tags.map((t) => html`<span class="chip">${t}</span>`)}</span></div>
       <h3 style="margin-top:1rem">Ingrediënten</h3>
-      <ul class="items">${ings.map((i) => html`<li class="item" style="min-height:0"><span class="grow">${i.name}${i.optional ? html` <span class="muted small">(optioneel)</span>` : ''}</span>
+      <ul class="items">${ings.map((i) => html`<li class="item" style="min-height:0"><span class="grow">${i.name}${isEquipment(i.name) ? html` <span class="badge">keukengerei — niet op de lijst</span>` : i.optional ? html` <span class="muted small">(optioneel)</span>` : ''}</span>
         <span class="muted">${i.quantity != null ? formatQty(i.quantity, i.unit === 'st' ? 'st' : i.unit) : ''}</span></li>`)}</ul>
       ${r.instructions ? html`<h3 style="margin-top:1rem">Bereiding</h3><p style="white-space:pre-line">${r.instructions}</p>` : ''}
       ${r.source_url ? html`<p class="small"><a href="${r.source_url}" target="_blank" rel="noopener">Origineel recept</a></p>` : ''}
@@ -182,7 +227,7 @@ function showRecipe(r, onChanged) {
     if (e.target.closest('[data-add]')) {
       try {
         const pantry = await q(sb.from('pantry_items').select('*').eq('household_id', hid()));
-        const need = subtractPantry(scaleIngredients(r.ingredients.filter((i) => !i.optional), r.servings, persons), pantry);
+        const need = subtractPantry(scaleIngredients(r.ingredients.filter(isShoppable), r.servings, persons), pantry);
         const toBuy = need.filter((n) => n.toBuy > 0).map((n) => ({ name: n.name, quantity: n.toBuy, unit: n.unit }));
         const fromPantry = need.filter((n) => n.toBuy <= 0).length;
         const res = await addToList(await defaultListId(), toBuy, `recept: ${r.title}`);

@@ -1,5 +1,5 @@
 // Service worker: app-schil offline beschikbaar; gegevens altijd live via Supabase.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL = `bs-shell-${VERSION}`;
 const CDN = `bs-cdn-${VERSION}`;
 const FILES = [

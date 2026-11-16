@@ -87,6 +87,7 @@ async function main() {
   // Geen afbeeldingen, video of lettertypes laden: sneller en minder belasting voor de websites
   await context.route('**/*', (route) => (['image', 'media', 'font'].includes(route.request().resourceType()) ? route.abort() : route.continue()));
   let failures = 0;
+  const summary = ['| Winkel | Acties | Producten | Resultaat |', '|---|---:|---:|---|'];
   for (const store of ONLY) {
     const base = STORES[store];
     if (!base) { console.warn(`Onbekende winkel: ${store}`); continue; }
@@ -108,6 +109,7 @@ async function main() {
       }
       const n = result.offers.length;
       console.log(`${store}: ${raw.length} ruwe items → ${n} acties${result.products ? `, ${result.products.length} producten` : ''}`);
+      summary.push(`| ${store} | ${n} | ${result.products?.length ?? '–'} | ${n ? 'ok' : 'niets gevonden'} (${raw.length} items op de pagina) |`);
       if (DRY) { console.log(JSON.stringify(result.offers.slice(0, 3), null, 1)); continue; }
       if (!n) {
         // Niets gevonden: waarschijnlijk is de website veranderd of geblokkeerd. Bestaande acties laten staan (ze verlopen vanzelf).
@@ -122,12 +124,18 @@ async function main() {
     } catch (e) {
       failures++;
       console.error(`${store}: ${e.message}`);
+      summary.push(`| ${store} | – | – | mislukt: ${String(e.message).replace(/\|/g, '/').slice(0, 120)} |`);
       if (run) await rest(`price_sync_runs?id=eq.${run.id}`, { method: 'PATCH', body: { status: 'fout', finished_at: new Date().toISOString(), message: String(e.message).slice(0, 500) } }).catch(() => {});
     } finally {
       await page.close();
     }
   }
   await browser.close();
+  // overzicht op de openbare pagina van deze run (GitHub → Actions → run)
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const { appendFileSync } = await import('node:fs');
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Aanbiedingen per winkel\n\n${summary.join('\n')}\n`);
+  }
   if (failures === ONLY.length) process.exit(1); // alleen falen als niets lukte
 }
 
