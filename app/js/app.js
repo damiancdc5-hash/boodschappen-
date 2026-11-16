@@ -74,7 +74,7 @@ async function render() {
     view.focus({ preventScroll: true });
   } catch (e) {
     console.error(e);
-    setHTML(view, html`<div class="card error"><h2>Er ging iets mis</h2><p>${errorText(e)}</p><button class="btn" onclick="location.reload()">Opnieuw laden</button></div>`);
+    setHTML(view, html`<div class="card error"><h2>Er ging iets mis</h2><p>${errorText(e)}</p><button class="btn" onclick="caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c)))).finally(()=>location.reload())">Opnieuw laden</button></div>`);
   }
 }
 
@@ -103,7 +103,13 @@ function renderBanner() {
 }
 
 async function boot() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    // Nieuwe versie van de app actief geworden? Eén keer herladen zodat alle bestanden van dezelfde versie zijn.
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => {});
+  }
   if (sb) {
     try {
       await initAuth();

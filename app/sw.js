@@ -1,5 +1,5 @@
 // Service worker: app-schil offline beschikbaar; gegevens altijd live via Supabase.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `bs-shell-${VERSION}`;
 const CDN = `bs-cdn-${VERSION}`;
 const FILES = [
@@ -28,7 +28,8 @@ self.addEventListener('fetch', (e) => {
   if (/supabase\.(co|in)|openstreetmap|overpass|nominatim/.test(url.hostname)) return;
   if (url.origin === location.origin) {
     // eigen bestanden: eerst netwerk (altijd nieuwste versie), anders cache
-    e.respondWith(fetch(req).then((res) => {
+    // altijd bij de server controleren of er een nieuwere versie is (voorkomt een mix van oude en nieuwe bestanden)
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then((r) => r || caches.match('index.html'))));
