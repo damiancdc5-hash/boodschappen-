@@ -134,19 +134,27 @@ export function normalizeAldi(raw) {
   return { offers: out };
 }
 
-/** Dirk en DekaMarkt hebben hetzelfde systeem. */
+/** Dirk en DekaMarkt hebben hetzelfde systeem. Foto's staan op web-fileserver.<winkel>.nl */
+export function detailresultImage(store, productPath, offerPath) {
+  const host = `https://web-fileserver.${store}.nl/`;
+  if (productPath) return host + encodeURIComponent(productPath) + '?width=300';
+  if (offerPath) return host + 'offers/' + encodeURIComponent(offerPath) + '?width=300';
+  return null;
+}
+
 export function normalizeDetailresult(store, raw) {
   const out = [];
   for (const o of raw) {
     const label = String(o.sign || '').replace(/actie_?/i, '').trim();
-    const items = o.products?.length ? o.products : [{ name: o.headerText, packaging: o.packaging, offerPrice: o.offerPrice, normalPrice: o.normalPrice }];
+    const items = o.products?.length ? o.products : [{ name: o.headerText, packaging: o.packaging, offerPrice: o.offerPrice, normalPrice: o.normalPrice, image: null }];
     for (const p of items) {
       if (!p.name) continue;
       const d = decide(label, { price: p.offerPrice, regular: p.normalPrice });
       if (!d) continue;
       out.push(row(store, { ...d, product_name: p.name, regular_price: p.normalPrice || null,
         offer_price: d.offer_type === 'fixed' ? d.params.price : null, size_text: p.packaging || null,
-        valid_from: toDate(o.start), valid_to: toDate(o.end), category: null, match_terms: matchTerms(p.name, [p.name]) }));
+        valid_from: toDate(o.start), valid_to: toDate(o.end), category: null, match_terms: matchTerms(p.name, [p.name]),
+        image_url: detailresultImage(store, p.image, o.image) }));
     }
   }
   return { offers: out };

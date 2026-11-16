@@ -128,9 +128,10 @@ export function extractDetailresult() {
     if (v && typeof v === 'object' && !Array.isArray(v) && 'offerId' in v && 'offerPrice' in v) {
       const o = h(i);
       res.push({ offerId: o.offerId, headerText: o.headerText, packaging: o.packaging, offerPrice: o.offerPrice, normalPrice: o.normalPrice,
-        sign: o.textPriceSign, subText: o.subText || null, start: o.startDate, end: o.endDate,
+        sign: o.textPriceSign, subText: o.subText || null, start: o.startDate, end: o.endDate, image: o.image || null,
         products: (o.products || []).filter((p) => p && p.productInformation).map((p) => ({ id: p.productId, offerPrice: p.offerPrice, normalPrice: p.normalPrice,
-          name: p.productInformation?.headerText, packaging: p.productInformation?.packaging, brand: p.productInformation?.brand })) });
+          name: p.productInformation?.headerText, packaging: p.productInformation?.packaging, brand: p.productInformation?.brand,
+          image: p.productInformation?.image || null })) });
     }
   });
   const ids = new Set();

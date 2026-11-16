@@ -36,7 +36,7 @@ export async function render(el) {
     const lastSync = ps?.lastRun?.finished_at || ps?.lastRun?.started_at;
     const hour = new Date().getHours();
     const myOffers = offers.filter((o) => enabledStores().includes(o.store));
-    const top = myOffers.filter((o) => offerDiscount(o) != null).sort((a, b) => offerDiscount(b) - offerDiscount(a)).slice(0, 10);
+    const top = myOffers.filter((o) => offerDiscount(o) != null).sort((a, b) => (!!b.image_url - !!a.image_url) || (offerDiscount(b) - offerDiscount(a))).slice(0, 10);
     const forList = offersForItems(items.filter((i) => !i.checked), myOffers);
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
     setHTML(el, html`<h1>${hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond'}, ${state.profile?.display_name || ''}</h1>

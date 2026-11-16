@@ -131,3 +131,9 @@ test('kortingspercentage', async () => {
   assert.equal(offerDiscount({ offer_type: 'multibuy', params: { n: 2, total: 6 }, regular_price: 3.99 }), 25);
   assert.equal(offerDiscount({ offer_type: 'nplusm', params: { n: 2, m: 3 } }), 60);
 });
+
+test('productfoto\'s Dirk/DekaMarkt', async () => {
+  const { detailresultImage } = await import('../scripts/offers/normalize.mjs');
+  assert.equal(detailresultImage('dirk', 'artikelen/243835_1.png', 'x'), 'https://web-fileserver.dirk.nl/artikelen%2F243835_1.png?width=300');
+  assert.equal(detailresultImage('dekamarkt', null, '46-2026-Deka/abc.png'), 'https://web-fileserver.dekamarkt.nl/offers/46-2026-Deka%2Fabc.png?width=300');
+});
