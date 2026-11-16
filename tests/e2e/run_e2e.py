@@ -147,6 +147,20 @@ def main():
             anna.screenshot(path=OUT / '04-weekmenu.png', full_page=True)
             anna.get_by_role('button', name='Goedkeuren → boodschappenlijst').first.click()
             expect(anna.locator('#toast')).to_contain_text('Boodschappenlijst bijgewerkt')
+            # een dag uit het goedgekeurde menu halen → bijbehorende boodschappen gaan van de lijst
+            anna.goto(BASE + '#/lijst'); anna.wait_for_timeout(400)
+            before = anna.locator('.item').count()
+            names_before = anna.locator('.item .name').all_inner_texts()
+            anna.goto(BASE + '#/weekmenu')
+            anna.locator('[data-delentry]').first.click()
+            anna.get_by_role('button', name='Verwijderen').last.click()
+            expect(anna.locator('#toast')).to_contain_text('Lijst bijgewerkt')
+            assert anna.locator('[data-delentry]').count() == 2, 'dag niet verwijderd'
+            anna.goto(BASE + '#/lijst'); anna.wait_for_timeout(400)
+            after = anna.locator('.item').count()
+            names_after = anna.locator('.item .name').all_inner_texts()
+            assert names_after != names_before, f'lijst onveranderd: {names_after}'
+            print('lijst voor/na dag verwijderen:', before, '→', after, '\nVOOR:', names_before, '\nNA:', names_after)
 
             # --- afrekenen op telefoon → budget
             bram.goto(BASE + '#/lijst')

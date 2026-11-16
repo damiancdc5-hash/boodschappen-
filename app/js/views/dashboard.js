@@ -66,6 +66,6 @@ export async function render(el) {
       <button class="btn ghost install-only" onclick="window.__installPrompt && window.__installPrompt.prompt()">📲 Installeer de app</button>`);
   };
   try { await load(); } catch (e) { setHTML(el, html`<p class="notice danger">${errorText(e)}</p>`); }
-  return onChange(['list_items', 'purchases', 'budgets', 'pantry_items', 'meal_plans', 'refresh'], debounce(() => load().catch(() => {}), 500));
+  return onChange(['list_items', 'purchases', 'budgets', 'pantry_items', 'meal_plans', 'meal_plan_entries', 'refresh'], debounce(() => load().catch(() => {}), 500));
 }
 export { weekStart };

@@ -1,11 +1,12 @@
 // Weekplanner: automatisch goedkoop weekmenu op basis van recepten, acties, voorraad en budget.
 import { html, setHTML, toast, errorText, formData, num, loading, isoDate, weekStart, dateNL, confirmDialog, debounce } from '../ui.js';
 import { sb, q, hid, state, onChange } from '../api.js';
-import { buildMenu, aggregateNeeds, costNeeds, shoppingForMenu } from '../lib/menu.js';
+import { buildMenu, aggregateNeeds, costNeeds } from '../lib/menu.js';
 import { euro, formatQty } from '../lib/units.js';
 import { priceIndexFor, storeName } from '../pricing.js';
 import { loadRecipes } from './recipes.js';
-import { addToList, defaultListId } from './list.js';
+import { defaultListId } from './list.js';
+import { planContributions, mergePlanIntoList, removalOps, fallbackContrib } from '../lib/plancontrib.js';
 
 export async function render(el) {
   setHTML(el, html`<h1>Weekmenu</h1><div id="plans"></div><div id="gen"></div><div id="result"></div>`);
@@ -23,25 +24,85 @@ export async function render(el) {
       <div class="row between"><h2>Week van ${dateNL(p.week_start, { day: 'numeric', month: 'long' })}</h2>
         <span class="badge ${p.status === 'goedgekeurd' ? 'ok' : ''}">${p.status}</span></div>
       <div class="small muted">${p.persons} personen${p.est_cost != null ? ' · verwacht ' + euro(Number(p.est_cost)) : ''}</div>
-      ${p.meal_plan_entries.sort((a, b) => a.day - b.day).map((e) => html`<div class="day"><b>${dateNL(addDays(p.week_start, e.day), { weekday: 'short', day: 'numeric' })}</b>
-        <span>${byId[e.recipe_id]?.title || html`<span class="muted">verwijderd recept</span>`}</span></div>`)}
+      ${p.meal_plan_entries.sort((a, b) => a.day - b.day).map((e) => html`<div class="day" style="grid-template-columns:70px 1fr auto"><b>${dateNL(addDays(p.week_start, e.day), { weekday: 'short', day: 'numeric' })}</b>
+        <span>${byId[e.recipe_id]?.title || html`<span class="muted">verwijderd recept</span>`}</span>
+        <button class="icon-btn" data-delentry="${p.id}:${e.id}" aria-label="Deze dag verwijderen" title="Deze dag verwijderen">✕</button></div>`)}
       <div class="row" style="margin-top:.6rem">${p.status !== 'goedgekeurd' ? html`<button class="btn small" data-approve="${p.id}">Goedkeuren → boodschappenlijst</button>` : ''}
         <button class="btn small ghost" data-delplan="${p.id}">Verwijderen</button></div></div>`)}` : '');
     el.querySelector('#plans').onclick = async (e) => {
-      const a = e.target.closest('[data-approve]'), d = e.target.closest('[data-delplan]');
+      const a = e.target.closest('[data-approve]'), d = e.target.closest('[data-delplan]'), de = e.target.closest('[data-delentry]');
       try {
-        if (a) { const p = plans.find((x) => x.id === a.dataset.approve); await approve(p.id, p.meal_plan_entries.map((x) => byId[x.recipe_id]).filter(Boolean), p.persons); }
-        if (d && await confirmDialog('Dit weekmenu verwijderen?', 'Verwijderen')) { await q(sb.from('meal_plans').delete().eq('id', d.dataset.delplan)); drawPlans(); }
+        if (a) await approve(plans.find((x) => x.id === a.dataset.approve));
+        if (de) {
+          const [pid, eid] = de.dataset.delentry.split(':');
+          const p = plans.find((x) => x.id === pid), en = p.meal_plan_entries.find((x) => x.id === eid);
+          const title = byId[en.recipe_id]?.title || 'dit recept';
+          const day = dateNL(addDays(p.week_start, en.day), { weekday: 'long' });
+          const msg = p.status === 'goedgekeurd'
+            ? `${title} op ${day} verwijderen? De boodschappen die hiervoor op de lijst zijn gezet, gaan er ook af (wat al is afgevinkt blijft staan).`
+            : `${title} op ${day} uit het menu halen?`;
+          if (!(await confirmDialog(msg, 'Verwijderen'))) return;
+          const r = await removeEntry(p, en);
+          toast(p.status === 'goedgekeurd' ? `Verwijderd. Lijst bijgewerkt: ${r.deleted} weg, ${r.updated} verminderd${r.kept ? `, ${r.kept} al afgevinkt` : ''}` : 'Verwijderd');
+          drawPlans();
+        }
+        if (d) {
+          const p = plans.find((x) => x.id === d.dataset.delplan);
+          const msg = p.status === 'goedgekeurd' ? 'Dit weekmenu verwijderen? De boodschappen ervan gaan ook van de lijst (wat al is afgevinkt blijft staan).' : 'Dit weekmenu verwijderen?';
+          if (!(await confirmDialog(msg, 'Verwijderen'))) return;
+          for (const en of p.meal_plan_entries) await removeEntry(p, en, { keepRow: true });
+          await q(sb.from('meal_plans').delete().eq('id', p.id));
+          toast('Weekmenu verwijderd'); drawPlans();
+        }
       } catch (err) { toast(errorText(err), 'error'); }
     };
   }
 
-  async function approve(planId, recs, persons) {
-    const items = shoppingForMenu(recs, persons, pantry);
-    const res = await addToList(await defaultListId(), items, 'weekmenu');
-    await q(sb.from('meal_plans').update({ status: 'goedgekeurd' }).eq('id', planId));
-    toast(`Boodschappenlijst bijgewerkt: ${res.added} nieuw, ${res.merged} opgeteld`);
+  const byIdNow = () => Object.fromEntries(recipes.map((r) => [r.id, r]));
+
+  /** Zet de boodschappen van een weekmenu op de lijst en onthoudt per dag wat erbij hoort. */
+  async function approve(plan) {
+    const byId = byIdNow();
+    const entries = [...plan.meal_plan_entries].sort((a, b) => a.day - b.day);
+    const listId = await defaultListId();
+    const existing = await q(sb.from('list_items').select('*').eq('list_id', listId));
+    const per = planContributions(entries.map((e) => ({ id: e.id, recipe: byId[e.recipe_id], servings: e.servings || plan.persons })), pantry);
+    const m = mergePlanIntoList(existing, per);
+    for (const u of m.updates) await q(sb.from('list_items').update({ quantity: u.quantity, unit: u.unit }).eq('id', u.id));
+    const ids = {};
+    if (m.inserts.length) {
+      const rows = await q(sb.from('list_items').insert(m.inserts.map((x) => ({ household_id: hid(), list_id: listId, name: x.name,
+        quantity: x.quantity, unit: x.unit, category: x.category, source: 'weekmenu' }))).select());
+      m.inserts.forEach((x, i) => { ids[x.tmp] = rows[i]?.id; });
+    }
+    for (const e of entries) {
+      const contrib = (m.contribs[e.id] || []).map((c) => ({ ...c, ref: ids[c.ref] || c.ref })).filter((c) => c.ref && !String(c.ref).startsWith('tmp:'));
+      // werkt ook als 004_menu_list_link.sql nog niet is uitgevoerd (dan valt verwijderen terug op "bron: weekmenu")
+      await sb.from('meal_plan_entries').update({ list_contrib: contrib }).eq('id', e.id);
+    }
+    await q(sb.from('meal_plans').update({ status: 'goedgekeurd' }).eq('id', plan.id));
+    toast(`Boodschappenlijst bijgewerkt: ${m.inserts.length} nieuw, ${m.updates.length} opgeteld`);
     drawPlans();
+  }
+
+  /** Haalt een dag uit het menu en (bij een goedgekeurd menu) de bijbehorende boodschappen van de lijst. */
+  async function removeEntry(plan, entry, { keepRow = false } = {}) {
+    let res = { deleted: 0, updated: 0, kept: 0 };
+    if (plan.status === 'goedgekeurd') {
+      const listId = await defaultListId();
+      const items = await q(sb.from('list_items').select('*').eq('household_id', hid()));
+      let contrib = Array.isArray(entry.list_contrib) && entry.list_contrib.length ? entry.list_contrib : null;
+      if (!contrib) {
+        const per = planContributions([{ id: entry.id, recipe: byIdNow()[entry.recipe_id], servings: entry.servings || plan.persons }], [])[0].items;
+        contrib = fallbackContrib(items.filter((i) => i.list_id === listId), per);
+      }
+      const ops = removalOps(items, contrib);
+      for (const u of ops.updates) await q(sb.from('list_items').update({ quantity: u.quantity }).eq('id', u.id));
+      if (ops.deletes.length) await q(sb.from('list_items').delete().in('id', ops.deletes));
+      res = { deleted: ops.deletes.length, updated: ops.updates.length, kept: ops.kept };
+    }
+    if (!keepRow) await q(sb.from('meal_plan_entries').delete().eq('id', entry.id));
+    return res;
   }
 
   setHTML(el.querySelector('#gen'), html`<form class="card" id="gf"><h2>Nieuw menu samenstellen</h2>
@@ -114,8 +175,8 @@ export async function render(el) {
         const plan = costNeeds(aggregateNeeds(chosen, opts.persons), priceIndex, pantry);
         const [p] = await q(sb.from('meal_plans').insert({ household_id: hid(), week_start: opts.week, persons: opts.persons, days: chosen.length,
           budget: opts.budget, preferences: opts.preferences, est_cost: plan.total }).select());
-        await q(sb.from('meal_plan_entries').insert(chosen.map((r, d) => ({ plan_id: p.id, household_id: hid(), day: d, recipe_id: r.id, servings: opts.persons }))));
-        if (sv.dataset.save === 'approve') await approve(p.id, chosen, opts.persons); else { toast('Concept bewaard'); drawPlans(); }
+        const ents = await q(sb.from('meal_plan_entries').insert(chosen.map((r, d) => ({ plan_id: p.id, household_id: hid(), day: d, recipe_id: r.id, servings: opts.persons }))).select());
+        if (sv.dataset.save === 'approve') await approve({ ...p, meal_plan_entries: ents }); else { toast('Concept bewaard'); drawPlans(); }
         out.innerHTML = '';
       } catch (err) { toast(errorText(err), 'error'); sv.disabled = false; }
     };

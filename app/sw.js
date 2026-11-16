@@ -1,5 +1,5 @@
 // Service worker: app-schil offline beschikbaar; gegevens altijd live via Supabase.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = `bs-shell-${VERSION}`;
 const CDN = `bs-cdn-${VERSION}`;
 const FILES = [
@@ -7,7 +7,7 @@ const FILES = [
   'js/app.js', 'js/api.js', 'js/config.js', 'js/ui.js', 'js/pricing.js',
   'js/lib/units.js', 'js/lib/ingredients.js', 'js/lib/offers.js', 'js/lib/optimizer.js', 'js/lib/menu.js', 'js/lib/geo.js', 'js/lib/recipes.js',
   'js/views/dashboard.js', 'js/views/list.js', 'js/views/prices.js', 'js/views/offers.js', 'js/views/recipes.js', 'js/views/planner.js', 'js/views/pantry.js',
-  'js/lib/offers.js', 'js/views/budget.js', 'js/views/route.js', 'js/views/settings.js', 'js/views/more.js', 'js/views/auth.js', 'js/views/onboarding.js', 'js/views/setup.js',
+  'js/lib/offers.js', 'js/lib/plancontrib.js', 'js/views/budget.js', 'js/views/route.js', 'js/views/settings.js', 'js/views/more.js', 'js/views/auth.js', 'js/views/onboarding.js', 'js/views/setup.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 
