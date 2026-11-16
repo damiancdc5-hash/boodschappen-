@@ -52,7 +52,9 @@ def main():
             anna.fill('#create input[name=name]', 'Familie Test')
             anna.get_by_role('button', name='Huishouden aanmaken').click()
             expect(anna.get_by_role('heading', name='Gezinsleden')).to_be_visible()
-            code = anna.locator('.kbd').inner_text().strip()
+            # Anna nodigt Bram uit (alleen op uitnodiging)
+            anna.fill('#inv input[name=email]', 'bram@test.nl'); anna.click('#inv button')
+            expect(anna.locator('.item', has_text='bram@test.nl')).to_be_visible()
             # budget instellen
             anna.goto(BASE + '#/budget'); anna.get_by_role('button', name='Budget instellen').click()
             anna.fill('input[name=weekly]', '60'); anna.fill('input[name=monthly]', '250'); anna.get_by_role('button', name='Opslaan').click()
@@ -69,13 +71,18 @@ def main():
 
             # --- Bram (telefoon) sluit aan
             bram = ctx.new_page(); setup(bram, 'bram'); bram.set_viewport_size({'width': 390, 'height': 844})
-            bram.goto(BASE + f'#/join/{code}')
-            expect(bram.get_by_text('Je bent uitgenodigd')).to_be_visible()
+            # Iemand zonder uitnodiging kan zich niet aanmelden
+            bram.goto(BASE)
             bram.get_by_text('Nieuw account').click()
-            bram.fill('#n', 'Bram'); bram.fill('#e', 'bram@test.nl'); bram.fill('#p', 'geheim123')
+            expect(bram.get_by_text('Aanmelden kan alleen op uitnodiging').first).to_be_visible()
+            bram.fill('#n', 'Vreemde'); bram.fill('#e', 'vreemd@test.nl'); bram.fill('#p', 'geheim123')
             bram.get_by_role('button', name='Account aanmaken').click()
-            expect(bram.locator('#join input[name=code]')).to_have_value(code)
-            bram.get_by_role('button', name='Aansluiten').click()
+            expect(bram.locator('#toast')).to_contain_text('alleen op uitnodiging')
+            # Bram (uitgenodigd) wel, en komt direct in het huishouden
+            bram.fill('#n', 'Bram'); bram.fill('#e', 'bram@test.nl')
+            bram.get_by_role('button', name='Account aanmaken').click()
+            expect(bram.get_by_role('heading', name='Goedenavond, Bram').or_(bram.get_by_role('heading', name='Goedemiddag, Bram')).or_(bram.get_by_role('heading', name='Goedemorgen, Bram'))).to_be_visible()
+            bram.goto(BASE + '#/lijst')
             expect(bram.locator('.item .name', has_text='pindakaas')).to_be_visible()
 
             # realtime: Bram vinkt af → Anna ziet het; Anna voegt toe → Bram ziet het
@@ -96,13 +103,15 @@ def main():
             anna.fill('#s', 'spaghetti')
             expect(anna.locator('tr.best', has_text='Dirk Spaghetti')).to_be_visible()
             anna.get_by_role('button', name='Aanbiedingen').click()
-            anna.get_by_role('button', name='＋ Actie toevoegen').click()
+            expect(anna.get_by_role('heading', name='Aanbiedingen', exact=True)).to_be_visible()
+            expect(anna.get_by_text('Voor jullie lijst')).to_be_visible()
+            expect(anna.locator('.offer-card', has_text='Dirk Spaghetti').first).to_contain_text('2 voor')
+            anna.locator('#add').click()
             anna.fill('input[name=product]', 'Jumbo Rundergehakt'); anna.select_option('select[name=store]', 'jumbo'); anna.select_option('select[name=type]', '1+1')
             anna.get_by_role('button', name='Opslaan').click()
-            expect(anna.locator('.item', has_text='Jumbo Rundergehakt')).to_contain_text('1+1 gratis')
-            expect(anna.get_by_text('In de aanbieding van jullie lijst')).to_be_visible()
-            expect(anna.get_by_text('spaghetti: Dirk Spaghetti')).to_be_visible()
+            expect(anna.locator('.offer-card', has_text='Jumbo Rundergehakt').first).to_contain_text('1+1 gratis')
             anna.screenshot(path=OUT / '03b-aanbiedingen.png', full_page=True)
+            anna.goto(BASE + '#/prijzen')
             anna.get_by_role('button', name='Databronnen').click()
             expect(anna.get_by_text('geen data beschikbaar').first).to_be_visible()
 
@@ -155,6 +164,11 @@ def main():
             bram.goto(BASE + '#/budget'); expect(bram.get_by_role('button', name='Budget instellen')).to_be_disabled()
             bram.goto(BASE + '#/meer'); bram.screenshot(path=OUT / '08-meer-telefoon.png')
             br.close()
+    except Exception:
+        for pg in ctx.pages:
+            try: print('--- PAGINA', pg.url, '\n', pg.locator('main').inner_text()[:600])
+            except Exception: pass
+        print('\n'.join(errors)); raise
     finally:
         srv.terminate()
     real = [e for e in errors if 'ERR_FAILED' not in e and 'net::' not in e]

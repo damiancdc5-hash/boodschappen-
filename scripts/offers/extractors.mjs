@@ -33,6 +33,7 @@ export function extractAH() {
           id: p.id, title: p.title, subtitle: p.subtitle, category: p.category, storeOnly: p.storeOnly, segmentType: p.segmentType,
           start: p.periodStart, end: p.periodEnd, webPath: p.webPath, productCount: p.productCount, salesUnitSize: p.salesUnitSize,
           labels: (p.promotionLabels || []).map((l) => [l.topText, l.centerText, l.bottomText].filter(Boolean).join(' ')),
+          image: (p.images || [])[0]?.url || null,
           product: pr ? { id: pr.id, title: pr.title, size: pr.salesUnitSize, webPath: pr.webPath,
             now: pr.priceV2?.now?.amount ?? null, was: pr.priceV2?.was?.amount ?? null, discount: pr.priceV2?.discount?.description || null } : null,
         });
@@ -52,6 +53,7 @@ export function extractJumbo() {
     href: a.querySelector('a.title-link')?.getAttribute('href') || null,
     subtitle: a.querySelector('.subtitle')?.textContent.trim() || '',
     tags: [...a.querySelectorAll('[data-testid="jum-tag"]')].map((t) => t.textContent.replace(/\s+/g, ' ').trim()),
+    image: a.querySelector('img')?.getAttribute('src') || null,
   })).filter((x) => x.title);
 }
 
@@ -66,7 +68,8 @@ export async function extractLidl() {
       return { id: String(d.productId || d.itemId || ''), title: d.fullTitle || d.title, category: d.category,
         price: d.price?.price ?? null, oldPrice: d.price?.oldPrice ?? null, packaging: d.price?.packaging?.text || null,
         plusPrice: plus?.price?.price ?? null, plusText: plus?.highlightText || null,
-        start: d.storeStartDate || null, end: d.storeEndDate || null, url: d.canonicalUrl || d.canonicalPath || null };
+        start: d.storeStartDate || null, end: d.storeEndDate || null, url: d.canonicalUrl || d.canonicalPath || null,
+        image: d.image || d.imageList_V1?.[0]?.image || null };
     } catch { return null; }
   }).filter((x) => x && x.id && x.title && x.price != null);
 }
@@ -91,7 +94,8 @@ export function extractAldi() {
         price: o.currentPrice.priceValue ?? null, strike: o.currentPrice.strikePrice?.strikePriceValue ?? null,
         label: o.currentPrice.priceTagLabels?.promoText1 || null, label2: o.currentPrice.priceTagLabels?.promoText2 || null,
         from: o.promotionPrices?.[0]?.validFromLocalDate || null, to: o.promotionPrices?.[0]?.validUntilLocalDate || null,
-        validFrom: o.currentPrice.validFrom || null, validUntil: o.currentPrice.validUntil || null, category: o.mainCategoryID || null });
+        validFrom: o.currentPrice.validFrom || null, validUntil: o.currentPrice.validUntil || null, category: o.mainCategoryID || null,
+        image: (o.assets || []).find((a) => a.type === 'primary')?.url || null });
     }
     for (const v of Object.values(o)) walk(v, depth + 1);
   };
@@ -152,6 +156,7 @@ export function extractPlus() {
       price: int ? parseFloat(int + '.' + (dec || '00')) : null,
       previous: e.querySelector('.product-header-price-previous')?.textContent.replace(/\s+/g, ' ').trim() || '',
       href,
+      image: e.querySelector('img')?.getAttribute('src') || null,
       text: e.innerText.replace(/\s+/g, ' ').trim().slice(0, 300) });
   }
   return out;

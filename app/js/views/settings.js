@@ -1,9 +1,21 @@
 // Huishoudinstellingen: leden en rollen, uitnodigen, adres en reisvoorkeuren, winkels, profiel.
-import { html, setHTML, toast, errorText, formData, num, confirmDialog, timeAgo } from '../ui.js';
+import { html, setHTML, toast, errorText, formData, num, confirmDialog, timeAgo, modal } from '../ui.js';
 import { sb, q, state, hid, isAdmin, loadMembers, loadHouseholds, selectHousehold, signOut, onChange } from '../api.js';
 import { STORES, geocode } from '../pricing.js';
 
 export async function render(el, { go }) {
+  let invites = [];
+  const loadInvites = async () => {
+    invites = await q(sb.from('household_invites').select('*').eq('household_id', hid()).is('accepted_at', null).order('created_at')).catch(() => []);
+  };
+  await loadInvites();
+  const appUrl = location.origin + location.pathname;
+  const shareInvite = async (email) => {
+    const text = `Je bent uitgenodigd voor "${state.household.name}" in onze boodschappenapp. Open ${appUrl}, kies "Nieuw account" en meld je aan met ${email}.`;
+    if (navigator.share) { await navigator.share({ title: 'Uitnodiging boodschappenapp', text }).catch(() => {}); return; }
+    try { await navigator.clipboard.writeText(text); toast('Uitnodigingstekst gekopieerd — plak hem in WhatsApp of een mail'); }
+    catch { modal('Uitnodiging versturen', html`<p>Stuur dit bericht naar ${email}:</p><textarea readonly rows="5" onfocus="this.select()">${text}</textarea>`); }
+  };
   const draw = () => {
     const h = state.household, admin = isAdmin();
     const link = `${location.origin}${location.pathname}#/join/${h.invite_code}`;
@@ -19,10 +31,17 @@ export async function render(el, { go }) {
       <p class="small muted">Beheerders kunnen instellingen, budget en leden beheren. Iedereen kan de lijst, recepten, weekmenu's en voorraad bewerken.</p></div>
 
     <div class="card"><h2>Gezinslid uitnodigen</h2>
-      <p>Uitnodigingscode: <span class="kbd">${h.invite_code}</span></p>
-      <div class="row"><button class="btn" id="share">Deel uitnodigingslink</button>
-        ${admin ? html`<button class="btn ghost" id="regen">Nieuwe code</button>` : ''}</div>
-      <p class="small muted">Het gezinslid opent de link, maakt een account aan en zit direct in jullie huishouden.</p></div>
+      <p class="small">Alleen mensen die jullie uitnodigen kunnen een account aanmaken. Vul het e-mailadres in waarmee het gezinslid zich gaat aanmelden.</p>
+      ${admin ? html`<form id="inv" class="row" autocomplete="off">
+          <input name="email" type="email" class="grow" placeholder="naam@voorbeeld.nl" required>
+          <select name="role" style="width:auto"><option value="member">gezinslid</option><option value="admin">beheerder</option></select>
+          <button class="btn">Uitnodigen</button></form>`
+        : html`<p class="notice small">Alleen beheerders kunnen uitnodigen.</p>`}
+      ${invites.length ? html`<h3 style="margin-top:1rem">Openstaande uitnodigingen</h3><ul class="items">${invites.map((i) => html`<li class="item">
+        <div class="grow"><div class="name">${i.email}</div><div class="meta">${i.role === 'admin' ? 'beheerder' : 'gezinslid'} · geldig t/m ${new Date(i.expires_at).toLocaleDateString('nl-NL')}</div></div>
+        <button class="btn small ghost" data-share-inv="${i.email}">Delen</button>
+        ${admin ? html`<button class="icon-btn" data-revoke="${i.id}" aria-label="Intrekken">✕</button>` : ''}</li>`)}</ul>` : ''}
+    </div>
 
     <form class="card" id="hf"><h2>Instellingen ${admin ? '' : html`<span class="badge">alleen-lezen</span>`}</h2>
       <fieldset ${admin ? '' : 'disabled'} style="border:0;padding:0;margin:0">
@@ -63,6 +82,9 @@ export async function render(el, { go }) {
       if (rm && await confirmDialog('Dit gezinslid uit het huishouden verwijderen?', 'Verwijderen')) {
         await q(sb.rpc('remove_member', { p_household: hid(), p_user: rm.dataset.remove })); await loadMembers(); draw(); return;
       }
+      const si = t.closest('[data-share-inv]'); if (si) { await shareInvite(si.dataset.shareInv); return; }
+      const rv = t.closest('[data-revoke]');
+      if (rv && await confirmDialog('Deze uitnodiging intrekken?', 'Intrekken')) { await q(sb.rpc('revoke_invite', { p_invite: rv.dataset.revoke })); await loadInvites(); draw(); return; }
       if (t.closest('#share')) {
         const link = `${location.origin}${location.pathname}#/join/${state.household.invite_code}`;
         const text = `Doe mee met "${state.household.name}" in onze boodschappenapp: ${link}`;
@@ -85,6 +107,12 @@ export async function render(el, { go }) {
     e.preventDefault();
     const f = formData(e.target);
     try {
+      if (e.target.id === 'inv') {
+        const res = await q(sb.rpc('invite_member', { p_household: hid(), p_email: f.email, p_role: f.role }));
+        if (res === 'toegevoegd') { toast(`${f.email} had al een account en is nu lid van jullie huishouden`); await loadMembers(); }
+        else { toast('Uitnodiging klaar — stuur het bericht door'); await shareInvite(f.email.toLowerCase()); }
+        await loadInvites(); draw(); return;
+      }
       if (e.target.id === 'pf') {
         await q(sb.from('profiles').update({ display_name: f.display_name }).eq('id', state.user.id));
         state.profile.display_name = f.display_name; await loadMembers(); draw(); toast('Profiel opgeslagen');
@@ -106,7 +134,7 @@ export async function render(el, { go }) {
     } catch (err) { toast(errorText(err), 'error'); }
   };
 
-  return onChange(['household_members', 'households'], async () => {
-    try { await loadMembers(); state.household = (await q(sb.from('households').select('*').eq('id', hid()).single())); draw(); } catch { /* */ }
+  return onChange(['household_members', 'households', 'household_invites'], async () => {
+    try { await loadMembers(); await loadInvites(); state.household = (await q(sb.from('households').select('*').eq('id', hid()).single())); draw(); } catch { /* */ }
   });
 }

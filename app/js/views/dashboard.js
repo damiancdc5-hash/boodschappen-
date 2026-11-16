@@ -2,20 +2,23 @@
 import { html, setHTML, isoDate, weekStart, timeAgo, debounce, errorText } from '../ui.js';
 import { sb, q, hid, state, onChange } from '../api.js';
 import { euro } from '../lib/units.js';
-import { priceStatus, enabledStores, storeName } from '../pricing.js';
+import { priceStatus, enabledStores, storeName, loadOffers } from '../pricing.js';
+import { offerDiscount } from '../lib/offers.js';
+import { offerCard, offersForItems } from './offers.js';
 import { budgetSnapshot } from './budget.js';
 import { daysLeft } from './pantry.js';
 
 export async function render(el) {
   const load = async () => {
     const today = isoDate();
-    const [items, pantry, snap, plans, ps] = await Promise.all([
-      q(sb.from('list_items').select('id, checked, list_id').eq('household_id', hid())),
+    const [items, pantry, snap, plans, ps, offers] = await Promise.all([
+      q(sb.from('list_items').select('id, name, checked, list_id').eq('household_id', hid())),
       q(sb.from('pantry_items').select('name, expires_on').eq('household_id', hid()).not('expires_on', 'is', null)),
       budgetSnapshot(),
       q(sb.from('meal_plans').select('id, week_start, status, meal_plan_entries(day, recipe_id, recipes(title))').eq('household_id', hid())
         .lte('week_start', today).order('week_start', { ascending: false }).limit(2)),
       priceStatus().catch(() => null),
+      loadOffers().catch(() => []),
     ]);
     const open = items.filter((i) => !i.checked).length;
     const soon = pantry.filter((p) => daysLeft(p.expires_on) <= 3);
@@ -32,6 +35,9 @@ export async function render(el) {
     const missingStores = ps ? enabledStores().filter((s) => !ps.stores[s]) : [];
     const lastSync = ps?.lastRun?.finished_at || ps?.lastRun?.started_at;
     const hour = new Date().getHours();
+    const myOffers = offers.filter((o) => enabledStores().includes(o.store));
+    const top = myOffers.filter((o) => offerDiscount(o) != null).sort((a, b) => offerDiscount(b) - offerDiscount(a)).slice(0, 10);
+    const forList = offersForItems(items.filter((i) => !i.checked), myOffers);
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
     setHTML(el, html`<h1>${hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond'}, ${state.profile?.display_name || ''}</h1>
       <div class="grid two">
@@ -46,6 +52,9 @@ export async function render(el) {
         <a class="card" href="#/weekmenu" style="text-decoration:none;color:inherit"><h2>🍽️ Vandaag</h2><p>${todayMeal || html`<span class="muted">Geen menu gepland. Stel een goedkoop weekmenu samen.</span>`}</p></a>
         <a class="card" href="#/voorraad" style="text-decoration:none;color:inherit"><h2>🥫 Voorraad</h2>${soon.length ? html`<p>Bijna over datum: <b>${soon.map((s) => s.name).join(', ')}</b></p>` : html`<p class="muted">Niets dat binnenkort verloopt.</p>`}</a>
       </div>
+      ${myOffers.length ? html`<div class="card"><div class="row between"><h2 style="margin:0">🏷️ Topaanbiedingen</h2><a href="#/aanbiedingen" class="small">Alle ${myOffers.length} bekijken →</a></div>
+        ${forList.length ? html`<p class="small" style="margin:.3rem 0 .6rem">🎯 <a href="#/aanbiedingen">${forList.length} actie(s)</a> voor producten op jullie lijst.</p>` : html`<div style="height:.6rem"></div>`}
+        <div class="scroll-row">${top.map((o) => offerCard(o, { compact: true }))}</div></div>` : ''}
       <div class="card"><h2>💶 Besparing deze maand</h2><div class="grid two">
         <div class="stat"><span class="v">${euro(snap.month.offer)}</span><span class="l">door aanbiedingen</span></div>
         <div class="stat"><span class="v">${euro(snap.month.compare)}</span><span class="l">t.o.v. gemiddelde supermarktprijs</span></div></div></div>

@@ -5,6 +5,7 @@ import { html, setHTML, $, toast, errorText } from './ui.js';
 export const NAV = [
   { id: 'dashboard', label: 'Overzicht', icon: '🏠' },
   { id: 'lijst', label: 'Lijst', icon: '🛒' },
+  { id: 'aanbiedingen', label: 'Aanbiedingen', icon: '🏷️' },
   { id: 'prijzen', label: 'Prijzen', icon: '€' },
   { id: 'recepten', label: 'Recepten', icon: '📖' },
   { id: 'weekmenu', label: 'Weekmenu', icon: '🗓️' },
@@ -13,11 +14,12 @@ export const NAV = [
   { id: 'route', label: 'Route', icon: '🗺️' },
   { id: 'instellingen', label: 'Huishouden', icon: '⚙️' },
 ];
-const BOTTOM = ['dashboard', 'lijst', 'prijzen', 'weekmenu', 'meer'];
+const BOTTOM = ['dashboard', 'lijst', 'aanbiedingen', 'prijzen', 'meer'];
 
 const VIEWS = {
   dashboard: () => import('./views/dashboard.js'),
   lijst: () => import('./views/list.js'),
+  aanbiedingen: () => import('./views/offers.js'),
   prijzen: () => import('./views/prices.js'),
   recepten: () => import('./views/recipes.js'),
   weekmenu: () => import('./views/planner.js'),
@@ -53,6 +55,9 @@ async function render() {
   else if (state.user && route === 'login') route = 'dashboard';
   if (!VIEWS[route]) route = 'dashboard';
 
+  // open dialogen horen bij de vorige pagina
+  document.querySelectorAll('.modal-backdrop').forEach((m) => m.remove());
+  document.body.classList.remove('no-scroll');
   renderChrome(route);
   if (cleanup) { try { cleanup(); } catch { /* */ } cleanup = null; }
   const view = $('#view');

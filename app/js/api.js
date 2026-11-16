@@ -116,7 +116,7 @@ export async function joinHousehold(code) {
 }
 
 // ------------------------------------------------------------------ realtime
-const TABLES = ['households', 'household_members', 'shopping_lists', 'list_items', 'favorites', 'offers', 'recipes',
+const TABLES = ['households', 'household_members', 'household_invites', 'shopping_lists', 'list_items', 'favorites', 'offers', 'recipes',
   'recipe_ingredients', 'meal_plans', 'meal_plan_entries', 'pantry_items', 'budgets', 'purchases'];
 let channel = null;
 

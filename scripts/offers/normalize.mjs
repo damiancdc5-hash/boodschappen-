@@ -4,6 +4,7 @@ import { parseOfferLabel, matchTerms } from '../../app/js/lib/offers.js';
 import { parseSize, unitPrice } from '../../app/js/lib/units.js';
 
 const TZ = 'Europe/Amsterdam';
+const safeImage = (u) => (typeof u === 'string' && /^https:\/\//.test(u) ? u.slice(0, 500) : null);
 export function toDate(v) {
   if (v == null || v === '') return null;
   const d = typeof v === 'number' ? new Date(v < 1e12 ? v * 1000 : v) : new Date(v);
@@ -38,7 +39,7 @@ function row(store, o) {
     offer_type: o.offer_type, params: o.params || {},
     regular_price: r2(o.regular_price), offer_price: r2(o.offer_price),
     size_text: o.size_text || null, valid_from: from, valid_to: o.valid_to || addDays(from, 6),
-    link: o.link || null, ext_id: o.ext_id || null, category: o.category || null,
+    link: o.link || null, ext_id: o.ext_id || null, category: o.category || null, image_url: safeImage(o.image_url),
     match_terms: o.match_terms?.length ? o.match_terms : matchTerms(o.product_name),
     source: `website ${store}`,
   };
@@ -73,7 +74,7 @@ export function normalizeAH(raw) {
       offer_price: d.offer_type === 'fixed' ? d.params.price : pr?.now ?? null,
       size_text: pr?.size || p.salesUnitSize || null, valid_from: toDate(p.start), valid_to: toDate(p.end),
       link: pr?.webPath ? 'https://www.ah.nl' + pr.webPath : p.webPath ? 'https://www.ah.nl' + p.webPath : null,
-      ext_id: pr?.id ? `wi${pr.id}` : null, category: p.category,
+      ext_id: pr?.id ? `wi${pr.id}` : null, category: p.category, image_url: p.image,
       match_terms: matchTerms(p.title, pr?.title ? [pr.title] : []),
     }));
   }
@@ -88,7 +89,7 @@ export function normalizeJumbo(raw) {
     const d = decide(tags.replace(/alleen in de winkel/i, ''));
     if (!d) continue;
     out.push(row('jumbo', { ...d, product_name: p.title, offer_price: d.offer_type === 'fixed' ? d.params.price : null,
-      valid_from: toDate(p.start), valid_to: toDate(p.end), link: p.href ? 'https://www.jumbo.com' + p.href : null }));
+      valid_from: toDate(p.start), valid_to: toDate(p.end), link: p.href ? 'https://www.jumbo.com' + p.href : null, image_url: p.image }));
   }
   return { offers: out };
 }
@@ -107,7 +108,7 @@ export function normalizeLidl(raw, checkedAt = new Date().toISOString()) {
     else if (p.oldPrice != null && p.price < p.oldPrice) d = { offer_type: 'fixed', params: { price: p.price }, offer_price: p.price };
     else d = { offer_type: 'fixed', params: { price: p.price }, offer_price: p.price };
     offers.push(row('lidl', { ...d, product_name: p.title, regular_price: regular, size_text: p.packaging,
-      valid_from: toDate(p.start), valid_to: toDate(p.end), link, ext_id: 'lidl-' + p.id, match_terms: matchTerms(p.title, [p.title]) }));
+      valid_from: toDate(p.start), valid_to: toDate(p.end), link, ext_id: 'lidl-' + p.id, match_terms: matchTerms(p.title, [p.title]), image_url: p.image }));
   }
   return { offers, products };
 }
@@ -127,7 +128,8 @@ export function normalizeAldi(raw) {
       || { offer_type: 'fixed', params: { price: p.price } };
     out.push(row('aldi', { ...d, product_name: name, regular_price: p.strike ?? null, offer_price: multi ? null : p.price,
       size_text: p.salesUnit, valid_from: p.from || toDate(p.validFrom), valid_to: p.to || toDate(p.validUntil),
-      link: p.slug ? `https://www.aldi.nl/product/${p.slug}.html` : null, match_terms: matchTerms(name, [name, p.name]) }));
+      link: p.slug ? `https://www.aldi.nl/product/${p.slug}.html` : null, match_terms: matchTerms(name, [name, p.name]),
+      image_url: p.image ? p.image + (p.image.includes('?') ? '' : '?wid=400') : null }));
   }
   return { offers: out };
 }
@@ -165,7 +167,7 @@ export function normalizePlus(raw, today = new Date()) {
     const id = (p.href || '').match(/-(\d{4,})$/)?.[1] || null;
     out.push(row('plus', { ...d, product_name: p.name, regular_price: prev, offer_price: d.offer_type === 'fixed' ? d.params.price : null,
       size_text: (p.complementary.match(/per\s+[^t]+?(?=\s+t\/m|$)/i) || [])[0] || null, valid_from: from, valid_to: to,
-      link: p.href ? 'https://www.plus.nl' + p.href : null, ext_id: id ? `-${id}` : null }));
+      link: p.href ? 'https://www.plus.nl' + p.href : null, ext_id: id ? `-${id}` : null, image_url: p.image }));
   }
   return { offers: out };
 }

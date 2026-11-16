@@ -44,6 +44,9 @@ export function errorText(e) {
   if (/Email not confirmed/i.test(m)) return 'Bevestig eerst je e-mailadres via de link in je mailbox.';
   if (/User already registered/i.test(m)) return 'Er bestaat al een account met dit e-mailadres.';
   if (/Password should be/i.test(m)) return 'Kies een wachtwoord van minstens 8 tekens.';
+  if (/Database error saving new user|alleen op uitnodiging|Signups not allowed/i.test(m))
+    return 'Aanmelden kan alleen op uitnodiging. Vraag een beheerder van je huishouden om je e-mailadres uit te nodigen (Huishouden → Gezinslid uitnodigen) en gebruik precies dat adres.';
+  if (/Requested function was not found|Function not found/i.test(m)) return 'De recept-functie is niet gevonden in Supabase. Controleer of de Edge Function precies "import-recipe" heet.';
   return m;
 }
 

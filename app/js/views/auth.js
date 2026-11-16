@@ -11,6 +11,7 @@ export async function render(el, { route, go }) {
       <img class="logo" src="icons/icon-192.png" alt="">
       <h1 class="center">${mode === 'login' ? 'Inloggen' : mode === 'register' ? 'Account aanmaken' : 'Wachtwoord vergeten'}</h1>
       ${join ? html`<p class="notice center">Je bent uitgenodigd voor een huishouden. Log in of maak een account aan om mee te doen.</p>` : ''}
+      ${mode === 'register' ? html`<p class="notice small center">Aanmelden kan alleen op uitnodiging. Gebruik het e-mailadres waarop je bent uitgenodigd.</p>` : ''}
       <form id="f" class="card">
         ${mode === 'register' ? html`<div class="field"><label for="n">Je naam</label><input id="n" name="name" autocomplete="name" required></div>` : ''}
         <div class="field"><label for="e">E-mailadres</label><input id="e" name="email" type="email" autocomplete="email" required></div>

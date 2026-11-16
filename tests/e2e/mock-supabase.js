@@ -68,6 +68,7 @@ class Builder {
     return this;
   }
   like(c, pat) { const re = new RegExp('^' + pat.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/[%*]/g, '.*') + '$'); this.filters.push((r) => re.test(String(r[c] ?? ''))); return this; }
+  is(c, v) { this.filters.push((r) => (v === null ? r[c] == null : r[c] === v)); return this; }
   match(o) { for (const [k, v] of Object.entries(o)) this.eq(k, v); return this; }
   order(c, { ascending = true } = {}) { this._order.push([c, ascending]); return this; }
   limit(n) { this._limit = n; return this; }
@@ -140,6 +141,14 @@ function rpc(name, a) {
       table(db, 'household_members').push({ household_id: h.id, user_id: uid(), role: 'member', joined_at: now() });
       save(db); broadcast('household_members', 'INSERT', { household_id: h.id, user_id: uid() }); return ok(h.id);
     }
+    case 'invite_member': {
+      const email = a.p_email.toLowerCase().trim();
+      const u = table(db, 'users').find((x) => x.email === email);
+      if (u) { table(db, 'household_members').push({ household_id: a.p_household, user_id: u.id, role: a.p_role || 'member', joined_at: now() }); save(db); broadcast('household_members', 'INSERT', { household_id: a.p_household, user_id: u.id }); return ok('toegevoegd'); }
+      const inv = { id: uuid(), household_id: a.p_household, email, role: a.p_role || 'member', created_at: now(), expires_at: new Date(Date.now() + 30 * 864e5).toISOString(), accepted_at: null };
+      table(db, 'household_invites').push(inv); save(db); broadcast('household_invites', 'INSERT', inv); return ok('uitgenodigd');
+    }
+    case 'revoke_invite': db.household_invites = table(db, 'household_invites').filter((x) => x.id !== a.p_invite); save(db); return ok(null);
     case 'regenerate_invite': { const h = table(db, 'households').find((x) => x.id === a.p_household); h.invite_code = code(); save(db); return ok(h.invite_code); }
     case 'set_member_role': { const m = table(db, 'household_members').find((x) => x.household_id === a.p_household && x.user_id === a.p_user); m.role = a.p_role; save(db); return ok(null); }
     case 'remove_member': db.household_members = table(db, 'household_members').filter((x) => !(x.household_id === a.p_household && x.user_id === a.p_user)); save(db); return ok(null);
@@ -172,9 +181,12 @@ export function createClient() {
       signUp: async ({ email, password, options }) => {
         const db = load(); const users = table(db, 'users');
         if (users.some((u) => u.email === email)) return { data: null, error: { message: 'User already registered' } };
+        const invites = table(db, 'household_invites').filter((i) => i.email === email.toLowerCase() && !i.accepted_at);
+        if (table(db, 'household_members').length && !invites.length) return { data: null, error: { message: 'Database error saving new user' } };
         const user = { id: uuid(), email, password }; users.push(user);
         table(db, 'profiles').push({ id: user.id, display_name: options?.data?.display_name || email.split('@')[0] });
-        save(db); const s = { user: { id: user.id, email } }; setSession(s, 'SIGNED_IN'); return { data: { session: s, user: s.user }, error: null };
+        const joined = invites.map((i) => { const m = { household_id: i.household_id, user_id: user.id, role: i.role, joined_at: now() }; table(db, 'household_members').push(m); i.accepted_at = now(); return m; });
+        save(db); joined.forEach((m) => broadcast('household_members', 'INSERT', m)); const s = { user: { id: user.id, email } }; setSession(s, 'SIGNED_IN'); return { data: { session: s, user: s.user }, error: null };
       },
       signInWithPassword: async ({ email, password }) => {
         const u = table(load(), 'users').find((x) => x.email === email && x.password === password);

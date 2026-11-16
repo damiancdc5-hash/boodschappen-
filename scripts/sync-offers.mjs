@@ -65,9 +65,16 @@ async function save(store, result, startedAt) {
     await rest(`store_products?store=eq.${store}&source=eq.${store}-website&seen_at=lt.${encodeURIComponent(startedAt)}`, { method: 'DELETE', prefer: 'return=minimal' });
   }
   await rest(`offers?household_id=is.null&store=eq.${store}&source=like.website*`, { method: 'DELETE', prefer: 'return=minimal' });
+  let withImages = true;
   for (let i = 0; i < offers.length; i += 500) {
-    await rest('offers', { method: 'POST', body: offers.slice(i, i + 500).map((o) => ({ ...o, household_id: null, entered_by: null, fetched_at: startedAt })),
-      prefer: 'return=minimal' });
+    const batch = offers.slice(i, i + 500).map((o) => ({ ...o, household_id: null, entered_by: null, fetched_at: startedAt }));
+    try {
+      await rest('offers', { method: 'POST', body: withImages ? batch : batch.map(({ image_url, ...o }) => o), prefer: 'return=minimal' });
+    } catch (e) {
+      // database nog zonder kolom image_url (003_invite_only.sql niet uitgevoerd): zonder foto's opslaan
+      if (withImages && /image_url/.test(e.message)) { withImages = false; i -= 500; continue; }
+      throw e;
+    }
   }
 }
 

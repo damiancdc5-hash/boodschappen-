@@ -143,3 +143,21 @@ export function costForPacks(price, packs, offer, { useCard = true } = {}) {
   if (total > regular) return { total: regular, regular, savings: 0, packsTaken: packs };
   return { total, regular, savings: round(regular - total, 2), packsTaken: taken };
 }
+
+/** Korting in procenten t.o.v. de normale prijs (afgerond), of null als dat niet te bepalen is. */
+export function offerDiscount(o) {
+  const p = o.params || {}, reg = Number(o.regular_price) || null;
+  let pct = null;
+  switch (o.offer_type) {
+    case 'percent': pct = Number(p.pct); break;
+    case '1+1': pct = 50; break;
+    case '2+1': pct = 100 / 3; break;
+    case 'nplusm': pct = (Number(p.m) / (Number(p.n) + Number(p.m))) * 100; break;
+    case '2e_half': pct = 25; break;
+    case 'fixed': case 'card': pct = reg ? (1 - Number(p.price) / reg) * 100 : null; break;
+    case 'amount_off': pct = reg ? (Number(p.amount) / reg) * 100 : null; break;
+    case 'multibuy': pct = reg ? (1 - Number(p.total) / (Number(p.n) * reg)) * 100 : null; break;
+    default: pct = null;
+  }
+  return pct != null && isFinite(pct) && pct > 0.5 && pct < 100 ? Math.round(pct) : null;
+}

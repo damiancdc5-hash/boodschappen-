@@ -121,3 +121,13 @@ test('PLUS', () => {
   assert.equal(offers.find((o) => /druiven/.test(o.product_name)).regular_price, 2.99);
   assert.equal(offers.find((o) => /Spruiten/.test(o.product_name)).valid_from, '2026-11-11');
 });
+
+test('kortingspercentage', async () => {
+  const { offerDiscount } = await import('../app/js/lib/offers.js');
+  assert.equal(offerDiscount({ offer_type: '1+1' }), 50);
+  assert.equal(offerDiscount({ offer_type: '2e_half' }), 25);
+  assert.equal(offerDiscount({ offer_type: 'fixed', params: { price: 1.49 }, regular_price: 2.29 }), 35);
+  assert.equal(offerDiscount({ offer_type: 'fixed', params: { price: 0.69 } }), null);
+  assert.equal(offerDiscount({ offer_type: 'multibuy', params: { n: 2, total: 6 }, regular_price: 3.99 }), 25);
+  assert.equal(offerDiscount({ offer_type: 'nplusm', params: { n: 2, m: 3 } }), 60);
+});

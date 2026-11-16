@@ -22,7 +22,7 @@ budgetbeheer en een winkelroute op de kaart. Werkt in de browser op iPhone, Andr
 ### 1. Supabase-project aanmaken
 1. Maak een gratis account op <https://supabase.com> → **New project**. Kies regio **Frankfurt (eu-central-1)**.
 2. Ga naar **SQL Editor** → **New query**, plak de volledige inhoud van `supabase/migrations/001_schema.sql` en klik **Run**.
-   Doe daarna hetzelfde met `supabase/migrations/002_website_offers.sql`.
+   Doe daarna hetzelfde met `supabase/migrations/002_website_offers.sql` en `supabase/migrations/003_invite_only.sql`.
 3. Ga naar **Project Settings → API** en noteer:
    - *Project URL* (bijv. `https://abcd.supabase.co`)
    - *anon public* key (mag in de browser staan)
@@ -58,10 +58,19 @@ Supabase → **Authentication → URL Configuration**:
 - *Site URL*: het adres van je app
 - *Redirect URLs*: hetzelfde adres (voor bevestigingsmails en wachtwoordherstel)
 
+### 5b. Alleen op uitnodiging
+Na `003_invite_only.sql` kan alleen het allereerste account zich vrij aanmelden. Daarna nodigt een beheerder gezinsleden uit via
+**Huishouden → Gezinslid uitnodigen** (e-mailadres invullen). Wie zich aanmeldt met dat adres, komt automatisch in het huishouden.
+
+Zet in Supabase **Authentication → Sign In / Providers → Email → Confirm email** uit. De ingebouwde mailservice van Supabase
+stuurt namelijk alleen mail naar leden van je Supabase-team; gezinsleden zouden de bevestigingsmail nooit krijgen. Omdat alleen
+uitgenodigde adressen een account kunnen maken, is dat veilig. (Wil je wel mail, zoals "wachtwoord vergeten" voor gezinsleden?
+Stel dan onder Authentication → Emails → SMTP een eigen mailserver in.)
+
 ### 6. Gebruiken
 1. Open de app, maak een account aan en bevestig je e-mailadres.
 2. Kies **Nieuw huishouden starten** (jij wordt beheerder). Vul onder **Huishouden** jullie adres, vervoer en supermarkten in.
-3. Klik **Deel uitnodigingslink** en stuur die naar de gezinsleden. Zij maken een account aan en zitten direct in het huishouden.
+3. Ga naar **Huishouden → Gezinslid uitnodigen**, vul het e-mailadres in en stuur het bericht door. Het gezinslid maakt met dat adres een account aan en zit direct in het huishouden.
 4. Installeren op het beginscherm: iPhone/iPad → Safari → deelknop → *Zet op beginscherm*. Android → Chrome-menu → *App installeren*.
    Laptop → installatie-icoon in de adresbalk van Chrome/Edge.
 

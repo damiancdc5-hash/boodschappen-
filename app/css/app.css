@@ -164,3 +164,18 @@ tr.best td { background: var(--brand-soft); }
 .list-head { display: flex; gap: .5rem; align-items: center; margin-bottom: .6rem; }
 .add-bar { display: grid; grid-template-columns: 1fr 74px 78px auto; gap: .4rem; }
 @media (max-width: 420px) { .add-bar { grid-template-columns: 1fr 60px 70px; } .add-bar .btn { grid-column: 1 / -1; } }
+
+/* Aanbiedingen */
+.offer-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); margin-bottom: 1rem; }
+@media (min-width: 640px) { .offer-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+.offer-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.offer-img { position: relative; height: 120px; background: #fff; display: grid; place-items: center; font-size: 2rem; }
+.offer-img img { max-width: 100%; max-height: 110px; object-fit: contain; }
+.offer-card.compact .offer-img { height: 84px; } .offer-card.compact .offer-img img { max-height: 76px; }
+.offer-pct { position: absolute; top: .4rem; left: .4rem; background: var(--danger); color: #fff; font-weight: 800; font-size: .8rem; padding: .1rem .45rem; border-radius: 999px; }
+.offer-body { padding: .6rem .7rem .7rem; display: flex; flex-direction: column; gap: .15rem; flex: 1; }
+.offer-deal { display: inline-block; align-self: flex-start; background: #ffe45c; color: #3a2f00; font-weight: 800; font-size: .82rem; padding: .1rem .45rem; border-radius: 6px; }
+.offer-name { font-weight: 600; font-size: .92rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.offer-prices { font-size: .95rem; }
+.scroll-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 170px); gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; }
+.scroll-row > * { scroll-snap-align: start; }

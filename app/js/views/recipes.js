@@ -78,7 +78,14 @@ function importDialog(onSaved) {
 
 async function fromUrl(url) {
   const { data, error } = await sb.functions.invoke(RECIPE_IMPORT_FUNCTION, { body: { url } });
-  if (error) throw new Error('Ophalen mislukt. Is de Edge Function "import-recipe" geïnstalleerd? (' + (error.message || error) + ')');
+  if (error) {
+    const status = error.context?.status;
+    if (status === 401) throw new Error('De recept-functie weigert de aanvraag (401). Log opnieuw in en probeer het nog eens.');
+    if (status === 404 || /Failed to send|fetch/i.test(error.message || '')) {
+      throw new Error('De recept-functie is niet bereikbaar. Controleer in Supabase → Edge Functions dat er een functie staat die precies "import-recipe" heet. Tot die tijd: kopieer de recepttekst en kies "Tekst".');
+    }
+    throw new Error('Ophalen mislukt: ' + (error.message || error));
+  }
   if (data?.error) throw new Error(data.error);
   if (data?.jsonld?.length) {
     const r = recipeFromJsonLd(data.jsonld, url);

@@ -11,6 +11,7 @@ const storeTag = (s) => html`<span class="store" style="--c:${STORES[s]?.color |
 
 export async function render(el, { go }) {
   let tab = sessionStorage.getItem('bs.pricesTab') || 'lijst';
+  if (tab === 'acties') tab = 'lijst';
   setHTML(el, html`<h1>Prijsvergelijker</h1>
     <div class="tabs" id="tabs">
       ${[['lijst', 'Mijn lijst'], ['zoeken', 'Product zoeken'], ['acties', 'Aanbiedingen'], ['bronnen', 'Databronnen']].map(([k, l]) =>
@@ -23,13 +24,17 @@ export async function render(el, { go }) {
     try {
       if (tab === 'lijst') await listPane(pane, go);
       if (tab === 'zoeken') await searchPane(pane);
-      if (tab === 'acties') await offersPane(pane);
       if (tab === 'bronnen') await sourcesPane(pane);
     } catch (e) { setHTML(pane, html`<p class="notice danger">${errorText(e)}</p>`); }
   };
-  el.querySelector('#tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; show(); } };
+  el.querySelector('#tabs').onclick = (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    if (b.dataset.tab === 'acties') { go('aanbiedingen'); return; } // eigen pagina
+    tab = b.dataset.tab; show();
+  };
   await show();
-  return onChange('offers', debounce(() => { if (tab === 'acties') show(); }, 300));
+  return null;
 }
 
 // ------------------------------------------------------------------ mijn lijst → scenario's
@@ -145,102 +150,6 @@ async function searchPane(pane) {
     b.classList.toggle('active'); run();
   };
   input.focus();
-}
-
-// ------------------------------------------------------------------ aanbiedingen
-async function offersPane(pane) {
-  const [offers, status, listItems] = await Promise.all([
-    loadOffers({ fresh: true }), offerSyncStatus().catch(() => ({})),
-    q(sb.from('list_items').select('name').eq('household_id', hid()).eq('checked', false)).catch(() => []),
-  ]);
-  const enabled = enabledStores();
-  const web = offers.filter((o) => !o.household_id && enabled.includes(o.store));
-  const mine = offers.filter((o) => o.household_id);
-  const wordsOf = (t) => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2);
-  const forList = [];
-  for (const it of listItems) {
-    const iw = wordsOf(it.name);
-    if (!iw.length) continue;
-    for (const o of web) { const ow = wordsOf(o.product_name).join(' '); if (iw.every((w) => ow.includes(w))) forList.push({ item: it.name, o }); }
-  }
-  let store = sessionStorage.getItem('bs.offerStore') || 'alle', filter = '';
-  const row = (o) => html`<li class="item"><div class="grow"><div class="name">${o.product_name} <span class="badge ok">${describeOffer(o)}</span></div>
-    <div class="meta">${storeTag(o.store)} ${o.size_text ? '· ' + o.size_text : ''} ${o.regular_price ? html`· normaal ${euro(Number(o.regular_price))}` : ''}
-      · t/m ${new Date(o.valid_to).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-      ${o.link ? html`· <a href="${o.link}" target="_blank" rel="noopener">bekijk</a>` : ''}
-      ${o.household_id ? html` · ${o.source}${o.entered_by ? ' · ' + memberName(o.entered_by) : ''}` : ''}</div></div>
-    ${o.household_id ? html`<button class="icon-btn" data-del="${o.id}" aria-label="Verwijderen">🗑</button>` : ''}</li>`;
-  const draw = () => {
-    const f = filter.toLowerCase();
-    const shown = web.filter((o) => (store === 'alle' || o.store === store) && (!f || o.product_name.toLowerCase().includes(f)));
-    setHTML(pane, html`
-      ${forList.length ? html`<div class="card"><h2>🎯 In de aanbieding van jullie lijst</h2><ul class="items">
-        ${forList.slice(0, 30).map(({ item, o }) => html`<li class="item"><div class="grow"><div class="name">${item}: ${o.product_name}</div>
-          <div class="meta">${storeTag(o.store)} · ${describeOffer(o)}${o.regular_price ? html` · normaal ${euro(Number(o.regular_price))}` : ''}</div></div></li>`)}</ul>
-        <p class="small muted">Deze acties worden automatisch meegerekend in de prijsvergelijking en het weekmenu.</p></div>` : ''}
-      <div class="card"><h2>Aanbiedingen van de supermarkten</h2>
-        <div class="table-wrap"><table><thead><tr><th>Winkel</th><th class="num">Acties</th><th>Opgehaald</th></tr></thead><tbody>
-        ${enabled.map((s) => { const r = status[s]; const n = web.filter((o) => o.store === s).length;
-          return html`<tr><td>${storeTag(s)}</td><td class="num">${n || '–'}</td><td>${r ? html`${timeAgo(r.finished_at || r.started_at)}
-            ${r.status !== 'ok' ? html` <span class="badge ${r.status === 'leeg' ? 'warn' : 'danger'}" title="${r.message || ''}">${r.status === 'leeg' ? 'niets gevonden' : 'mislukt'}</span>` : ''}`
-            : html`<span class="muted small">${['vomar', 'hoogvliet'].includes(s) ? 'niet automatisch — voer acties zelf in' : 'nog niet opgehaald'}</span>`}</td></tr>`; })}
-        </tbody></table></div>
-        <p class="small muted">Elke ochtend automatisch opgehaald van de aanbiedingenpagina's van de supermarkten. Lukt dat een keer niet,
-          dan blijven de laatst bekende acties staan tot hun einddatum.</p>
-        <div class="row" style="margin:.6rem 0"><input id="of" placeholder="Zoek in aanbiedingen…" class="grow" value="${filter}"></div>
-        <div class="tabs">${['alle', ...enabled.filter((s) => web.some((o) => o.store === s))].map((s) => html`<button data-st="${s}" class="${s === store ? 'active' : ''}">${s === 'alle' ? `Alle (${web.length})` : storeName(s)}</button>`)}</div>
-        ${shown.length ? html`<ul class="items">${shown.slice(0, 300).map(row)}</ul>${shown.length > 300 ? html`<p class="small muted">Eerste 300 van ${shown.length} getoond; zoek om te verfijnen.</p>` : ''}`
-          : html`<div class="empty"><p>${web.length ? 'Geen aanbiedingen gevonden.' : 'Nog geen aanbiedingen opgehaald. Zie de installatiehandleiding (stap 4b).'}</p></div>`}
-      </div>
-      <div class="card"><h2>Zelf ingevoerde acties</h2>
-        <p class="small">Voor winkels of acties die de app niet automatisch vindt (bijv. Vomar, Hoogvliet of een schapactie). Alleen zichtbaar voor jullie huishouden.</p>
-        ${mine.length ? html`<ul class="items">${mine.map(row)}</ul>` : ''}
-        <button class="btn" id="add">＋ Actie toevoegen</button></div>`);
-    pane.querySelector('#add').onclick = () => addOffer();
-    const inp = pane.querySelector('#of');
-    inp.oninput = debounce(() => { filter = inp.value; draw(); const n = pane.querySelector('#of'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250);
-  };
-  draw();
-  pane.onclick = async (e) => {
-    const st = e.target.closest('[data-st]');
-    if (st) { store = st.dataset.st; sessionStorage.setItem('bs.offerStore', store); draw(); return; }
-    const d = e.target.closest('[data-del]');
-    if (d && await confirmDialog('Deze actie verwijderen?', 'Verwijderen')) {
-      try { await q(sb.from('offers').delete().eq('id', d.dataset.del)); offersPane(pane); } catch (err) { toast(errorText(err), 'error'); }
-    }
-  };
-  function addOffer() {
-    const end = new Date(); end.setDate(end.getDate() + ((7 - end.getDay()) % 7 || 7));
-    const m = modal('Actie toevoegen', html`<form id="of">
-      <div class="field"><label>Product (zoals in de winkel)</label><input name="product" placeholder="Bijv. Calvé pindakaas" required></div>
-      <div class="fields"><div class="field"><label>Winkel</label><select name="store">${Object.entries(STORES).map(([k, v]) => html`<option value="${k}">${v.name}</option>`)}</select></div>
-        <div class="field"><label>Soort actie</label><select name="type">${Object.entries(OFFER_TYPES).filter(([k]) => k !== 'info').map(([k, v]) => html`<option value="${k}">${v}</option>`)}</select></div></div>
-      <div class="fields"><div class="field" data-p="percent"><label>Korting %</label><input name="pct" inputmode="decimal"></div>
-        <div class="field" data-p="multibuy nplusm"><label>Aantal (kopen)</label><input name="n" inputmode="numeric" placeholder="3"></div>
-        <div class="field" data-p="nplusm"><label>Gratis erbij</label><input name="m" inputmode="numeric" placeholder="1"></div>
-        <div class="field" data-p="amount_off"><label>Korting (€)</label><input name="amount" inputmode="decimal"></div>
-        <div class="field" data-p="multibuy"><label>Voor (€)</label><input name="total" inputmode="decimal" placeholder="5,00"></div>
-        <div class="field" data-p="fixed card"><label>Actieprijs (€)</label><input name="price" inputmode="decimal"></div></div>
-      <div class="fields"><div class="field"><label>Geldig t/m</label><input name="to" type="date" value="${isoDate(end)}" required></div>
-        <div class="field"><label>Bron</label><input name="source" value="folder" placeholder="folder / app / schap"></div></div>
-      <button class="btn block">Opslaan</button></form>`);
-    const f = m.el.querySelector('#of');
-    const sync = () => m.el.querySelectorAll('[data-p]').forEach((d) => d.classList.toggle('hidden', !d.dataset.p.split(' ').includes(f.type.value)));
-    f.type.onchange = sync; sync();
-    f.onsubmit = async (e) => {
-      e.preventDefault();
-      const v = formData(f);
-      const params = v.type === 'percent' ? { pct: num(v.pct) } : v.type === 'multibuy' ? { n: num(v.n), total: num(v.total) } :
-        v.type === 'nplusm' ? { n: num(v.n), m: num(v.m) } : v.type === 'amount_off' ? { amount: num(v.amount) } :
-        ['fixed', 'card'].includes(v.type) ? { price: num(v.price) } : {};
-      if (Object.values(params).some((x) => x == null)) { toast('Vul de actiegegevens in', 'error'); return; }
-      try {
-        await q(sb.from('offers').insert({ household_id: hid(), store: v.store, product_name: v.product, offer_type: v.type, params,
-          valid_to: v.to, source: 'handmatig: ' + (v.source || 'folder') }));
-        m.close(); toast('Actie opgeslagen'); offersPane(pane);
-      } catch (err) { toast(errorText(err), 'error'); }
-    };
-  }
 }
 
 // ------------------------------------------------------------------ databronnen
