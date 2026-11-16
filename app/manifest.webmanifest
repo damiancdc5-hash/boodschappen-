@@ -1,0 +1,21 @@
+{
+  "name": "Boodschappenassistent",
+  "short_name": "Boodschappen",
+  "description": "Gedeelde boodschappenlijst, prijsvergelijker, weekmenu, voorraad en budget voor het hele huishouden.",
+  "lang": "nl-NL",
+  "start_url": "./#/dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f6f3",
+  "theme_color": "#1f8a5b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Boodschappenlijst", "url": "./#/lijst", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Prijzen vergelijken", "url": "./#/prijzen", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

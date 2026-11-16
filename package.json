@@ -1,0 +1,14 @@
+{
+  "name": "boodschappenassistent",
+  "private": true,
+  "type": "module",
+  "description": "Slimme boodschappenassistent (PWA) — scripts voor prijs- en aanbiedingensync",
+  "scripts": {
+    "test": "node --test tests/lib.test.mjs tests/offers.test.mjs",
+    "sync:prices": "node scripts/sync-prices.mjs",
+    "sync:offers": "node scripts/sync-offers.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

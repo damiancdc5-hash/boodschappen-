@@ -1,0 +1,19 @@
+name: Prijzen bijwerken
+on:
+  schedule:
+    - cron: '17 6 * * *'   # dagelijks rond 07:17/08:17 Nederlandse tijd
+  workflow_dispatch: {}      # handmatig starten via tabblad Actions
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Checkjebon-prijzen inladen
+        run: node scripts/sync-prices.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

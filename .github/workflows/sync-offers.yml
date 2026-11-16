@@ -1,0 +1,28 @@
+name: Aanbiedingen bijwerken
+on:
+  schedule:
+    - cron: '41 5 * * *'   # dagelijks rond 06:41/07:41 Nederlandse tijd
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Alleen deze winkels (komma-gescheiden, leeg = alle)'
+        required: false
+        default: ''
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Browser installeren
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Aanbiedingen ophalen
+        run: node scripts/sync-offers.mjs ${{ github.event.inputs.only && format('--only {0}', github.event.inputs.only) || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
