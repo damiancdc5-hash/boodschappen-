@@ -32,7 +32,7 @@ await new Promise((r) => api.listen(8772, r));
 
 const code = await new Promise((resolve) => {
   const p = spawn(process.execPath, [path.join(here, '../../scripts/sync-offers.mjs')], {
-    env: { ...process.env, SUPABASE_URL: 'http://127.0.0.1:8772', SUPABASE_SERVICE_ROLE_KEY: 'test-key', OFFERS_FIXTURE_BASE: 'http://127.0.0.1:8771' },
+    env: { ...process.env, SUPABASE_URL: 'http://127.0.0.1:8772', SUPABASE_SERVICE_ROLE_KEY: 'test-key', OFFERS_FIXTURE_BASE: 'http://127.0.0.1:8771', OFFERS_MIN_PRODUCTS: '1' },
     stdio: 'inherit',
   });
   p.on('exit', resolve);
@@ -52,9 +52,14 @@ const deletes = calls.filter((c) => c.method === 'DELETE' && c.url.includes('/of
 assert.equal(deletes.length, 7);
 assert.ok(deletes.every((d) => d.url.includes('household_id=is.null') && d.url.includes('source=like.website*')));
 // Lidl-producten komen in de prijsvergelijking
-const lidlProducts = calls.find((c) => c.method === 'POST' && c.url.startsWith('/rest/v1/store_products'));
+const productCalls = calls.filter((c) => c.method === 'POST' && c.url.startsWith('/rest/v1/store_products'));
+const lidlProducts = productCalls.find((c) => c.body[0].store === 'lidl');
 assert.equal(lidlProducts.body.length, 6);
 assert.ok(lidlProducts.url.includes('on_conflict=store,ext_key'));
+// Aldi-assortiment komt in de prijsvergelijking (merkenpagina overgeslagen, doorgestreepte prijs = normale prijs)
+const aldiProducts = productCalls.find((c) => c.body[0].store === 'aldi').body;
+assert.deepEqual(aldiProducts.map((p) => [p.name, p.price, p.unit_price]), [['Milsani Halfvolle melk', 0.99, 0.99], ['Milsani Yoghurt naturel', 1.39, 1.39]]);
+assert.ok(calls.some((c) => c.method === 'DELETE' && c.url.includes('store_products?store=eq.aldi&source=eq.aldi-website')));
 // elke winkel krijgt een statusregel 'ok'
 const oks = calls.filter((c) => c.method === 'PATCH' && c.body?.status === 'ok');
 assert.equal(oks.length, 7);

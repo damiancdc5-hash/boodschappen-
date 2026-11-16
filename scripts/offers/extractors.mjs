@@ -162,3 +162,41 @@ export function extractPlus() {
   }
   return out;
 }
+
+/**
+ * Aldi assortiment (/producten.html): alle subcategoriepagina's ophalen en de producten met prijs uitlezen.
+ * Draait in de pagina van aldi.nl (zelfde website), één pagina tegelijk met een korte pauze.
+ */
+export async function extractAldiAssortment() {
+  const get = async (u) => { const r = await fetch(u, { credentials: 'omit' }); return r.ok ? r.text() : ''; };
+  const home = await get('/producten.html');
+  if (!home) return [];
+  const doc = new DOMParser().parseFromString(home, 'text/html');
+  const skip = /\/(aldi-merken|speciaal-assortiment|sintassortiment|feestassortiment)\//;
+  const subs = [...new Set([...doc.querySelectorAll('a[href]')].map((a) => new URL(a.getAttribute('href'), location.origin).href.split('#')[0].split('?')[0])
+    .filter((h) => /\/producten\/[^/]+\/[^/]+\.html$/.test(h) && !skip.test(h)))];
+  const out = new Map();
+  for (const u of subs) {
+    const t = await get(u);
+    const m = t.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (m) {
+      const seen = new Set();
+      const walk = (o, d) => {
+        if (d > 40 || o == null) return;
+        if (typeof o === 'string') { const s = o.trim(); if ((s[0] === '{' || s[0] === '[') && s.includes('currentPrice')) { try { walk(JSON.parse(s), d + 1); } catch { /* */ } } return; }
+        if (typeof o !== 'object' || seen.has(o)) return;
+        seen.add(o);
+        if (!Array.isArray(o) && o.name && o.currentPrice && typeof o.currentPrice === 'object' && o.currentPrice.priceValue != null) {
+          const id = o.objectID || o.productSlug || o.name;
+          if (!out.has(id)) out.set(id, { id, name: o.name, brand: o.brandName || o.brand || null, price: o.currentPrice.priceValue,
+            strike: o.currentPrice.strikePrice?.strikePriceValue ?? null, salesUnit: o.salesUnit || null, slug: o.productSlug || null,
+            category: o.mainCategoryID || null, image: (o.assets || []).find((a) => a.type === 'primary')?.url || null });
+        }
+        for (const v of Object.values(o)) walk(v, d + 1);
+      };
+      try { walk(JSON.parse(m[1]), 0); } catch { /* */ }
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return [...out.values()];
+}

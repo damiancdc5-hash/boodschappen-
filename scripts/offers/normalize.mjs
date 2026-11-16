@@ -179,3 +179,18 @@ export function normalizePlus(raw, today = new Date()) {
   }
   return { offers: out };
 }
+
+/** Aldi-assortiment → regels voor store_products (normale schapprijs; bij een actie de doorgestreepte prijs). */
+export function normalizeAldiProducts(raw, checkedAt = new Date().toISOString()) {
+  const rows = [];
+  for (const p of raw) {
+    const regular = p.strike ?? p.price;
+    if (regular == null || !(regular > 0)) continue;
+    const name = [p.brand ? titleCase(p.brand) : null, p.name].filter(Boolean).join(' ');
+    const size = parseSize(String(p.salesUnit || '').replace(/^per\s+/i, ''));
+    rows.push({ store: 'aldi', name: name.slice(0, 300), link: p.slug ? `https://www.aldi.nl/product/${p.slug}.html` : null,
+      price: r2(regular), size_text: p.salesUnit ? String(p.salesUnit).slice(0, 60) : null, amount: size?.amount ?? null, unit: size?.unit ?? null,
+      unit_price: size ? unitPrice(regular, size) : null, source: 'aldi-website', checked_at: checkedAt, ext_key: 'aldi-' + p.id });
+  }
+  return rows;
+}

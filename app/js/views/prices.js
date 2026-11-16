@@ -164,8 +164,8 @@ async function sourcesPane(pane) {
     ${Object.keys(STORES).map((s) => { const r = st.stores[s]; return html`<tr><td>${storeTag(s)}</td><td class="num">${r ? r.products.toLocaleString('nl-NL') : '–'}</td>
       <td>${r ? timeAgo(r.last_checked) : html`<span class="badge warn">geen data beschikbaar</span>`}</td></tr>`; })}
     </tbody></table></div>
-    <p class="small muted">Lidl zit niet in deze dataset. Van Lidl staan alleen de producten uit de wekelijkse aanbiedingen van lidl.nl in de app
-      (met normale prijs en Lidl Plus-prijs). Aanbiedingen van alle winkels staan onder <b>Aanbiedingen</b>.</p></div>`);
+    <p class="small muted">Aldi staat op dit moment niet in de Checkjebon-dataset; de prijzen van Aldi komen daarom elke ochtend rechtstreeks
+      van het assortiment op aldi.nl. Aanbiedingen van alle winkels staan op de pagina <a href="#/aanbiedingen">Aanbiedingen</a>.</p></div>`);
 }
 
 export { costForPacks };

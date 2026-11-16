@@ -102,7 +102,7 @@ Stel dan onder Authentication → Emails → SMTP een eigen mailserver in.)
 
 - **Er worden nooit verzonnen prijzen getoond.** Ontbreekt een prijs, dan staat er "geen prijs" en telt het product niet mee in het totaal (dat wordt er dan bij gemeld).
 - **Normale prijzen** komen uit de open dataset van Checkjebon.nl (open source op GitHub; de makers geven aan dat de data hergebruikt mag worden).
-  Die dekt AH, Jumbo, Aldi, PLUS, Dirk, Vomar, Hoogvliet en DekaMarkt. **Lidl** zit er niet in; van Lidl gebruikt de app de producten uit de wekelijkse aanbiedingen op lidl.nl.
+  Die dekt AH, Jumbo, Lidl, PLUS, Dirk, Vomar, Hoogvliet en DekaMarkt. **Aldi** staat er (sinds november 2026) niet meer in; de prijzen van Aldi haalt de aanbiedingensync daarom elke ochtend van het assortiment op aldi.nl (± 1.800 producten).
   "Laatst gecontroleerd" is het moment waarop de bron haar prijzen voor het laatst heeft bijgewerkt.
 - **Aanbiedingen** worden elke ochtend automatisch van de websites van de supermarkten gehaald:
 

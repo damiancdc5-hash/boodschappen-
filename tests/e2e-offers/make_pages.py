@@ -83,3 +83,12 @@ for p in load('plus'):
 (OUT / 'plus.html').write_text('<!doctype html><html><body><p>Woensdag 11 november t/m dinsdag 17 november</p><div id="m">' + ''.join(items[:4]) +
     '</div><script>const rest=' + json.dumps(items[4:]) + ';addEventListener("wheel",()=>{if(rest.length){document.getElementById("m").insertAdjacentHTML("beforeend",rest.shift())}})</script></body></html>')
 print('pagina\'s gemaakt in', OUT)
+
+# --- Aldi assortiment: overzichtspagina + één subcategorie
+(OUT / 'producten.html').write_text('<!doctype html><html><body><a href="/producten/zuivel-eieren-boter/verse-zuivel.html">Verse zuivel</a>'
+    '<a href="/producten/aldi-merken/milsani.html">Milsani</a></body></html>')
+zuivel = {"z1": {"name": "Halfvolle melk", "brandName": "MILSANI", "salesUnit": "1 l", "productSlug": "halfvolle-melk-1", "objectID": "z1",
+                 "currentPrice": {"priceValue": 0.99}}, "z2": {"name": "Yoghurt naturel", "brandName": "MILSANI", "salesUnit": "1 kg", "productSlug": "yoghurt-2",
+                 "objectID": "z2", "currentPrice": {"priceValue": 1.15, "strikePrice": {"strikePriceValue": 1.39}}}}
+(OUT / 'verse-zuivel.html').write_text('<!doctype html><html><body><script id="__NEXT_DATA__" type="application/json">' +
+    json.dumps({"props": {"pageProps": {"x": json.dumps({"hits": zuivel})}}}) + '</script></body></html>')

@@ -14,7 +14,8 @@ const STORES = {
   ah: { url: 'https://www.ah.nl/bonus', extract: X.extractAH, normalize: N.normalizeAH },
   jumbo: { url: 'https://www.jumbo.com/aanbiedingen/nu', extract: X.extractJumbo, normalize: N.normalizeJumbo, scroll: 'window', key: (x) => x.id || x.title },
   lidl: { url: 'https://www.lidl.nl/c/aanbiedingen/a10008785', extract: X.extractLidl, normalize: N.normalizeLidl },
-  aldi: { url: 'https://www.aldi.nl/aanbiedingen.html', extract: X.extractAldi, normalize: N.normalizeAldi },
+  aldi: { url: 'https://www.aldi.nl/aanbiedingen.html', extract: X.extractAldi, normalize: N.normalizeAldi,
+    assortment: X.extractAldiAssortment, normalizeProducts: N.normalizeAldiProducts, minProducts: 300 }, // Aldi ontbreekt in de gewone prijsbron
   plus: { url: 'https://www.plus.nl/aanbiedingen', extract: X.extractPlus, normalize: N.normalizePlus, scroll: 'wheel', key: (x) => (x.href || '') + '|' + x.name, settle: 5000 },
   dirk: { url: 'https://www.dirk.nl/aanbiedingen', extract: X.extractDetailresult, normalize: (r) => N.normalizeDetailresult('dirk', r) },
   dekamarkt: { url: 'https://www.dekamarkt.nl/aanbiedingen', extract: X.extractDetailresult, normalize: (r) => N.normalizeDetailresult('dekamarkt', r) },
@@ -98,6 +99,13 @@ async function main() {
     try {
       const raw = await collect(page, cfg);
       const result = cfg.normalize(raw);
+      if (cfg.assortment) {
+        // volledig assortiment met prijzen, voor de prijsvergelijking
+        const rawProducts = await page.evaluate(cfg.assortment).catch((e) => { console.warn(`${store}: assortiment mislukt: ${e.message}`); return []; });
+        const products = cfg.normalizeProducts(rawProducts);
+        if (products.length >= Number(process.env.OFFERS_MIN_PRODUCTS || cfg.minProducts || 1)) result.products = [...(result.products || []), ...products];
+        else console.warn(`${store}: maar ${products.length} producten in het assortiment gevonden; prijzen niet bijgewerkt`);
+      }
       const n = result.offers.length;
       console.log(`${store}: ${raw.length} ruwe items → ${n} acties${result.products ? `, ${result.products.length} producten` : ''}`);
       if (DRY) { console.log(JSON.stringify(result.offers.slice(0, 3), null, 1)); continue; }
