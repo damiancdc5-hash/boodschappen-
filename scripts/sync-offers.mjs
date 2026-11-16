@@ -132,6 +132,10 @@ async function main() {
   }
   await browser.close();
   // overzicht op de openbare pagina van deze run (GitHub → Actions → run)
+  if (process.env.GITHUB_ACTIONS) {
+    // ook als melding (zichtbaar op de openbare run-pagina, zonder in te loggen)
+    console.log(`::notice title=Aanbiedingen per winkel::${summary.slice(2).map((l) => l.replace(/^\| | \|$/g, '').replace(/ \| /g, ' · ')).join(' ‖ ')}`);
+  }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const { appendFileSync } = await import('node:fs');
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Aanbiedingen per winkel\n\n${summary.join('\n')}\n`);
