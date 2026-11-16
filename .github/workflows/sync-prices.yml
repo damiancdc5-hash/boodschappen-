@@ -1,5 +1,8 @@
 name: Prijzen bijwerken
 on:
+  push:                    # ook draaien als het script zelf verandert
+    branches: [main]
+    paths: ['.github/workflows/sync-prices.yml', 'scripts/sync-prices.mjs']
   schedule:
     - cron: '17 6 * * *'   # dagelijks rond 07:17/08:17 Nederlandse tijd
   workflow_dispatch: {}      # handmatig starten via tabblad Actions
