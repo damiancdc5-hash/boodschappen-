@@ -85,7 +85,7 @@ for p in load('plus'):
 print('pagina\'s gemaakt in', OUT)
 
 # --- Aldi assortiment: overzichtspagina + één subcategorie
-(OUT / 'producten.html').write_text('<!doctype html><html><body><a href="/producten/zuivel-eieren-boter/verse-zuivel.html">Verse zuivel</a>'
+(OUT / 'producten.html').write_text('<!doctype html><html><body><a href="https://example.test/producten/zuivel-eieren-boter/verse-zuivel.html">Verse zuivel</a>'
     '<a href="/producten/aldi-merken/milsani.html">Milsani</a></body></html>')
 zuivel = {"z1": {"name": "Halfvolle melk", "brandName": "MILSANI", "salesUnit": "1 l", "productSlug": "halfvolle-melk-1", "objectID": "z1",
                  "currentPrice": {"priceValue": 0.99}}, "z2": {"name": "Yoghurt naturel", "brandName": "MILSANI", "salesUnit": "1 kg", "productSlug": "yoghurt-2",

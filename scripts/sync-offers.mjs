@@ -15,7 +15,8 @@ const STORES = {
   jumbo: { url: 'https://www.jumbo.com/aanbiedingen/nu', extract: X.extractJumbo, normalize: N.normalizeJumbo, scroll: 'window', key: (x) => x.id || x.title },
   lidl: { url: 'https://www.lidl.nl/c/aanbiedingen/a10008785', extract: X.extractLidl, normalize: N.normalizeLidl },
   aldi: { url: 'https://www.aldi.nl/aanbiedingen.html', extract: X.extractAldi, normalize: N.normalizeAldi,
-    assortment: X.extractAldiAssortment, normalizeProducts: N.normalizeAldiProducts, minProducts: 300 }, // Aldi ontbreekt in de gewone prijsbron
+    assortmentUrl: 'https://www.aldi.nl/producten.html', assortmentLinks: X.aldiCategoryLinks, assortmentExtract: X.extractAldi,
+    normalizeProducts: N.normalizeAldiProducts, minProducts: 300 }, // Aldi ontbreekt in de gewone prijsbron
   plus: { url: 'https://www.plus.nl/aanbiedingen', extract: X.extractPlus, normalize: N.normalizePlus, scroll: 'wheel', key: (x) => (x.href || '') + '|' + x.name, settle: 5000 },
   dirk: { url: 'https://www.dirk.nl/aanbiedingen', extract: X.extractDetailresult, normalize: (r) => N.normalizeDetailresult('dirk', r) },
   dekamarkt: { url: 'https://www.dekamarkt.nl/aanbiedingen', extract: X.extractDetailresult, normalize: (r) => N.normalizeDetailresult('dekamarkt', r) },
@@ -94,22 +95,39 @@ async function main() {
     // Voor tests: OFFERS_FIXTURE_BASE=http://localhost:8000 laadt <base>/<winkel>.html in plaats van de echte website
     const cfg = process.env.OFFERS_FIXTURE_BASE ? { ...base, url: `${process.env.OFFERS_FIXTURE_BASE}/${store}.html`, settle: 300 } : base;
     const startedAt = new Date().toISOString();
-    let run = null;
+    let run = null, assortmentNote = '';
     if (!DRY) [run] = await rest('price_sync_runs', { method: 'POST', body: { source: `aanbiedingen:${store}` }, prefer: 'return=representation' });
     const page = await context.newPage();
     try {
       const raw = await collect(page, cfg);
       const result = cfg.normalize(raw);
-      if (cfg.assortment) {
-        // volledig assortiment met prijzen, voor de prijsvergelijking
-        const rawProducts = await page.evaluate(cfg.assortment).catch((e) => { console.warn(`${store}: assortiment mislukt: ${e.message}`); return []; });
-        const products = cfg.normalizeProducts(rawProducts);
+      if (cfg.assortmentUrl) {
+        // volledig assortiment met prijzen, voor de prijsvergelijking: elke categoriepagina gewoon openen
+        const all = new Map();
+        let pages = 0, failed = 0;
+        try {
+          const home = process.env.OFFERS_FIXTURE_BASE ? `${process.env.OFFERS_FIXTURE_BASE}/producten.html` : cfg.assortmentUrl;
+          await page.goto(home, { waitUntil: 'domcontentloaded', timeout: 60000 });
+          const links = await page.evaluate(cfg.assortmentLinks);
+          for (const link of links) {
+            const url = process.env.OFFERS_FIXTURE_BASE ? `${process.env.OFFERS_FIXTURE_BASE}/${link.split('/').pop()}` : link;
+            try {
+              const r = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+              if (r && r.status() >= 400) { failed++; continue; }
+              for (const p of await page.evaluate(cfg.assortmentExtract)) if (!all.has(p.id)) all.set(p.id, p);
+              pages++;
+            } catch { failed++; }
+            await page.waitForTimeout(300);
+          }
+        } catch (e) { console.warn(`${store}: assortiment mislukt: ${e.message}`); }
+        const products = cfg.normalizeProducts([...all.values()]);
+        assortmentNote = `assortiment: ${products.length} producten uit ${pages} pagina's${failed ? `, ${failed} mislukt` : ''}`;
         if (products.length >= Number(process.env.OFFERS_MIN_PRODUCTS || cfg.minProducts || 1)) result.products = [...(result.products || []), ...products];
-        else console.warn(`${store}: maar ${products.length} producten in het assortiment gevonden; prijzen niet bijgewerkt`);
+        else assortmentNote += ' — te weinig, prijzen niet bijgewerkt';
       }
       const n = result.offers.length;
       console.log(`${store}: ${raw.length} ruwe items → ${n} acties${result.products ? `, ${result.products.length} producten` : ''}`);
-      summary.push(`| ${store} | ${n} | ${result.products?.length ?? '–'} | ${n ? 'ok' : 'niets gevonden'} (${raw.length} items op de pagina) |`);
+      summary.push(`| ${store} | ${n} | ${result.products?.length ?? '–'} | ${n ? 'ok' : 'niets gevonden'} (${raw.length} items op de pagina)${assortmentNote ? '; ' + assortmentNote : ''} |`);
       if (DRY) { console.log(JSON.stringify(result.offers.slice(0, 3), null, 1)); continue; }
       if (!n) {
         // Niets gevonden: waarschijnlijk is de website veranderd of geblokkeerd. Bestaande acties laten staan (ze verlopen vanzelf).
