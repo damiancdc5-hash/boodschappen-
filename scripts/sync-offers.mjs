@@ -83,8 +83,10 @@ async function save(store, result, startedAt) {
 async function main() {
   if (!DRY && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY)) throw new Error('SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY zijn nodig (of gebruik --dry-run)');
   const { chromium } = await import('playwright');
-  const browser = await chromium.launch({ headless: !args.includes('--headed') });
-  const context = await browser.newContext({ locale: 'nl-NL', timezoneId: 'Europe/Amsterdam', viewport: { width: 1366, height: 900 } });
+  const browser = await chromium.launch({ headless: !args.includes('--headed'), args: ['--disable-blink-features=AutomationControlled'] });
+  const context = await browser.newContext({ locale: 'nl-NL', timezoneId: 'Europe/Amsterdam', viewport: { width: 1366, height: 900 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    extraHTTPHeaders: { 'Accept-Language': 'nl-NL,nl;q=0.9,en;q=0.5' } });
   // Geen afbeeldingen, video of lettertypes laden: sneller en minder belasting voor de websites
   await context.route('**/*', (route) => (['image', 'media', 'font'].includes(route.request().resourceType()) ? route.abort() : route.continue()));
   let failures = 0;
@@ -107,8 +109,11 @@ async function main() {
         let pages = 0, failed = 0;
         try {
           const home = process.env.OFFERS_FIXTURE_BASE ? `${process.env.OFFERS_FIXTURE_BASE}/producten.html` : cfg.assortmentUrl;
-          await page.goto(home, { waitUntil: 'domcontentloaded', timeout: 60000 });
+          const first = await page.goto(home, { waitUntil: 'load', timeout: 60000 });
+          await page.waitForSelector('a[href*="/producten/"]', { timeout: 20000 }).catch(() => {});
+          await page.waitForTimeout(3000);
           const links = await page.evaluate(cfg.assortmentLinks);
+          console.log(`::notice title=Aldi assortiment::status ${first?.status()}, titel "${await page.title()}", ${links.length} categorielinks`);
           for (const link of links) {
             const url = process.env.OFFERS_FIXTURE_BASE ? `${process.env.OFFERS_FIXTURE_BASE}/${link.split('/').pop()}` : link;
             try {
